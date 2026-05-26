@@ -4,9 +4,6 @@
 .vscode/
 *.swp
 *.swo
-.claude/
-*.md
-*.docx
 # === Java / Maven ===
 **/target/
 *.class
@@ -60,3 +57,9 @@ desktop.ini
 
 # === 根目录临时图片 ===
 050d047de753d3c91b1d3a6c5f1bd598.png
+# 忽略所有 .md 文件（如果你确定不需要它们）
+*.md
+*.docx
+
+# 忽略整个 .claude 文件夹
+.claude/
