@@ -1,0 +1,166 @@
+/* ===== 主题变量（与 Element Plus dark 协同） ===== */
+
+:root {
+  /* 浅色（默认） */
+  --tmap-bg: #f0f2f5;
+  --tmap-surface: #ffffff;
+  --tmap-surface-2: #fafbfc;
+  --tmap-border: #e8eaed;
+  --tmap-border-soft: #f0f0f0;
+  --tmap-text: #1d1d1f;
+  --tmap-text-secondary: #5f6368;
+  --tmap-text-muted: #909399;
+  --tmap-primary: #1a73e8;
+  --tmap-primary-hover: #1557b0;
+  --tmap-success: #34a853;
+  --tmap-danger: #ea4335;
+  --tmap-warn: #f4b400;
+  --tmap-chat-bubble-user: #1a73e8;
+  --tmap-chat-bubble-user-text: #ffffff;
+  --tmap-chat-bubble-assistant: #f5f6f8;
+  --tmap-chat-bubble-assistant-text: #1d1d1f;
+  --tmap-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+html.dark {
+  --tmap-bg: #1a1a1f;
+  --tmap-surface: #25252c;
+  --tmap-surface-2: #2d2d35;
+  --tmap-border: #3a3a44;
+  --tmap-border-soft: #2e2e36;
+  --tmap-text: #e8e8ea;
+  --tmap-text-secondary: #b0b0b8;
+  --tmap-text-muted: #7f7f88;
+  --tmap-primary: #4d8de0;
+  --tmap-primary-hover: #6ba0e6;
+  --tmap-chat-bubble-user: #2563eb;
+  --tmap-chat-bubble-user-text: #ffffff;
+  --tmap-chat-bubble-assistant: #2d2d35;
+  --tmap-chat-bubble-assistant-text: #e8e8ea;
+  --tmap-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+/* ===== body 主体 ===== */
+html, body, #app {
+  background-color: var(--tmap-bg);
+  color: var(--tmap-text);
+}
+
+/* ===== 主题切换过渡：只在切换瞬间打开，避免常驻 transition 影响交互动效 ===== */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.35s ease, color 0.35s ease,
+              border-color 0.35s ease, fill 0.35s ease, stroke 0.35s ease,
+              box-shadow 0.35s ease !important;
+  /* 不要影响 transform / opacity 已有动效 */
+  transition-property: background-color, color, border-color, fill, stroke, box-shadow !important;
+}
+
+/* prefers-reduced-motion：用户关闭动效时直接切换 */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transitioning,
+  html.theme-transitioning * {
+    transition: none !important;
+  }
+}
+
+/* ===== 路由切换淡入（配合 router-view） ===== */
+.route-fade-enter-active,
+.route-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.route-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.route-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-fade-enter-active,
+  .route-fade-leave-active {
+    transition: none;
+  }
+}
+
+/* ===== Agent 面板 / 聊天暗黑适配（用 CSS 变量覆写硬编码颜色） ===== */
+html.dark .agent-panel-wrap {
+  background: var(--tmap-surface) !important;
+  border-left-color: var(--tmap-border) !important;
+}
+html.dark .panel-header {
+  background: var(--tmap-surface-2) !important;
+  border-bottom-color: var(--tmap-border) !important;
+}
+html.dark .title { color: var(--tmap-text) !important; }
+html.dark .header-btn { color: var(--tmap-text-secondary) !important; }
+html.dark .header-btn:hover { background: var(--tmap-surface-2) !important; }
+
+html.dark .message-bubble.user .text {
+  background: var(--tmap-chat-bubble-user);
+  color: var(--tmap-chat-bubble-user-text);
+}
+html.dark .message-bubble.assistant .text {
+  background: var(--tmap-chat-bubble-assistant) !important;
+  color: var(--tmap-chat-bubble-assistant-text) !important;
+}
+html.dark .avatar { background: var(--tmap-surface-2) !important; }
+html.dark .chip-btn {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-primary) !important;
+}
+html.dark .chip-btn:hover {
+  background: var(--tmap-surface) !important;
+}
+
+html.dark .chat-input-wrap {
+  background: var(--tmap-surface) !important;
+  border-top-color: var(--tmap-border) !important;
+}
+html.dark .chat-textarea {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .input-foot { color: var(--tmap-text-muted) !important; }
+
+html.dark .route-card {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .station-name,
+html.dark .meta-item { color: var(--tmap-text) !important; }
+
+html.dark .order-card {
+  background: linear-gradient(135deg, #3d2a1a, var(--tmap-surface)) !important;
+  border-color: #6b4a2a !important;
+}
+
+html.dark .message-list { background: transparent; }
+
+html.dark .empty-text { color: var(--tmap-text) !important; }
+html.dark .empty-hint { color: var(--tmap-text-muted) !important; }
+
+html.dark .ticket-page { background: var(--tmap-bg) !important; }
+html.dark .ticket-panel { background: var(--tmap-surface-2) !important; }
+html.dark .ticket-card,
+html.dark .map-container,
+html.dark .route-buy {
+  background: var(--tmap-surface) !important;
+}
+html.dark .ss-row {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .tch-title,
+html.dark .ro-name { color: var(--tmap-text) !important; }
+html.dark .tch-hint,
+html.dark .ss-label,
+html.dark .rm-text { color: var(--tmap-text-muted) !important; }

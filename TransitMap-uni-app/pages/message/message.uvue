@@ -1,0 +1,357 @@
+<template>
+    <view class="message-page">
+        <!-- 顶部未读统计 -->
+        <view class="header-card" v-if="unreadCount > 0">
+            <view class="hc-left">
+                <view class="hc-num-wrap">
+                    <text class="hc-num">{{ unreadCount }}</text>
+                </view>
+                <view class="hc-text-wrap">
+                    <text class="hc-title">条未读消息</text>
+                    <text class="hc-sub">查看新通知</text>
+                </view>
+            </view>
+            <view class="hc-action" @tap="handleMarkAllRead">
+                <text class="hc-action-text">全部已读</text>
+            </view>
+        </view>
+
+        <!-- 消息列表 -->
+        <scroll-view scroll-y class="msg-scroll">
+            <view class="msg-list" v-if="messages.length">
+                <view class="msg-item" v-for="msg in messages" :key="msg.id"
+                      :class="{ unread: msg.isRead === 0 }"
+                      @tap="handleRead(msg)">
+                    <view class="msg-icon-col">
+                        <view class="msg-tag" :style="{ background: getType(msg.type).bg }">
+                            <text class="msg-tag-text" :style="{ color: getType(msg.type).color }">{{ getType(msg.type).text }}</text>
+                        </view>
+                        <view class="msg-unread-dot" v-if="msg.isRead === 0"></view>
+                    </view>
+                    <view class="msg-body">
+                        <view class="msg-head">
+                            <text class="msg-title">{{ msg.title }}</text>
+                            <text class="msg-time">{{ formatRelativeTime(msg.createTime) }}</text>
+                        </view>
+                        <text class="msg-content">{{ msg.content }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <view class="empty-wrap" v-else-if="!loading">
+                <empty-state icon="📭" title="暂无消息" sub="您的消息通知会显示在这里" />
+            </view>
+
+            <view class="loading-wrap" v-else>
+                <text class="loading-text">加载中...</text>
+            </view>
+
+            <!-- 联系管理员卡 -->
+            <view class="contact-card">
+                <view class="contact-header">
+                    <text class="contact-title">联系管理员</text>
+                    <text class="contact-sub">遇到问题？反馈给我们</text>
+                </view>
+                <textarea class="contact-input"
+                          v-model="contactContent"
+                          placeholder="请描述您遇到的问题..."
+                          placeholder-style="color:#c0c4cc"
+                          maxlength="500"
+                          :show-confirm-bar="false"></textarea>
+                <view class="contact-footer">
+                    <text class="contact-counter">{{ contactContent.length }}/500</text>
+                    <view class="contact-btn" :class="{ disabled: !contactContent.trim() || sending }" @tap="handleSendContact">
+                        <text class="contact-btn-text">发送</text>
+                    </view>
+                </view>
+            </view>
+
+            <view class="bottom-spacer"></view>
+        </scroll-view>
+    </view>
+</template>
+
+<script>
+    import { getMessageList, getMessageUnreadCount, markMessageRead, markAllMessagesRead, sendContactMessage } from '@/api/message'
+    import { useUserStore } from '@/store/user'
+    import { getMessageType, formatRelativeTime } from '@/utils/format'
+    import EmptyState from '@/components/empty-state.uvue'
+
+    const userStore = useUserStore()
+
+    export default {
+        components: { EmptyState },
+        data() {
+            return {
+                messages: [], loading: false, page: 1, unreadCount: 0,
+                contactContent: '', sending: false, pollTimer: null
+            }
+        },
+        onLoad() {
+            this.fetchMessages()
+            this.fetchUnread()
+            this.pollTimer = setInterval(() => { this.fetchUnread() }, 30000)
+        },
+        onUnload() {
+            if (this.pollTimer) clearInterval(this.pollTimer)
+        },
+        methods: {
+            getType: getMessageType,
+            formatRelativeTime,
+            async fetchMessages() {
+                if (!userStore.isLoggedIn()) return
+                this.loading = true
+                try {
+                    const res = await getMessageList({ page: this.page, size: 20 })
+                    if (res.code === 200) this.messages = res.data.records || []
+                } catch {} finally { this.loading = false }
+            },
+            async fetchUnread() {
+                if (!userStore.isLoggedIn()) return
+                try {
+                    const res = await getMessageUnreadCount()
+                    if (res.code === 200) this.unreadCount = res.data.count || 0
+                } catch {}
+            },
+            async handleRead(msg) {
+                if (msg.isRead === 0) {
+                    try {
+                        await markMessageRead(msg.id)
+                        msg.isRead = 1
+                        this.unreadCount = Math.max(0, this.unreadCount - 1)
+                    } catch {}
+                }
+            },
+            async handleMarkAllRead() {
+                try {
+                    await markAllMessagesRead()
+                    this.messages.forEach(m => m.isRead = 1)
+                    this.unreadCount = 0
+                    uni.showToast({ title: '已全部标记为已读', icon: 'success' })
+                } catch {}
+            },
+            async handleSendContact() {
+                const content = this.contactContent.trim()
+                if (!content) {
+                    uni.showToast({ title: '请输入内容', icon: 'none' })
+                    return
+                }
+                if (this.sending) return
+                this.sending = true
+                try {
+                    await sendContactMessage(content)
+                    uni.showToast({ title: '消息已发送', icon: 'success' })
+                    this.contactContent = ''
+                } catch {} finally { this.sending = false }
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.message-page {
+    min-height: 100vh;
+    background: #f7f8fa;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 未读统计 */
+.header-card {
+    margin: 24rpx 24rpx 0;
+    background: linear-gradient(135deg, #1a73e8, #1565c0);
+    border-radius: 16rpx;
+    padding: 22rpx 20rpx;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.hc-left {
+    display: flex;
+    align-items: center;
+    gap: 14rpx;
+}
+.hc-num-wrap {
+    width: 60rpx;
+    height: 60rpx;
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hc-num {
+    font-size: 30rpx;
+    color: #fff;
+    font-weight: 800;
+}
+.hc-text-wrap {
+    display: flex;
+    flex-direction: column;
+}
+.hc-title {
+    font-size: 26rpx;
+    color: #fff;
+    font-weight: 700;
+}
+.hc-sub {
+    font-size: 20rpx;
+    color: rgba(255, 255, 255, 0.8);
+    margin-top: 2rpx;
+}
+.hc-action {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 10rpx 22rpx;
+    border-radius: 14rpx;
+}
+.hc-action-text {
+    font-size: 22rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+
+/* 列表 */
+.msg-scroll { flex: 1; }
+.msg-list { padding: 16rpx 24rpx 0; }
+.msg-item {
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 18rpx 20rpx;
+    margin-bottom: 12rpx;
+    display: flex;
+    gap: 14rpx;
+}
+.msg-item.unread {
+    border-color: #d2e3fc;
+    background: #f5f8ff;
+}
+.msg-icon-col {
+    position: relative;
+    flex-shrink: 0;
+    padding-top: 2rpx;
+}
+.msg-tag {
+    padding: 6rpx 12rpx;
+    border-radius: 8rpx;
+}
+.msg-tag-text {
+    font-size: 20rpx;
+    font-weight: 700;
+}
+.msg-unread-dot {
+    position: absolute;
+    top: -2rpx;
+    right: -4rpx;
+    width: 12rpx;
+    height: 12rpx;
+    background: #f43f5e;
+    border-radius: 50%;
+    border: 2rpx solid #fff;
+}
+.msg-body {
+    flex: 1;
+    min-width: 0;
+}
+.msg-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8rpx;
+    gap: 10rpx;
+}
+.msg-title {
+    flex: 1;
+    font-size: 28rpx;
+    color: #1a1a2e;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.msg-time {
+    font-size: 20rpx;
+    color: #909399;
+    flex-shrink: 0;
+}
+.msg-content {
+    font-size: 24rpx;
+    color: #606266;
+    line-height: 1.6;
+}
+
+/* 空 / 加载 */
+.empty-wrap {
+    padding: 60rpx 0;
+}
+.loading-wrap {
+    padding: 60rpx 0;
+    text-align: center;
+}
+.loading-text {
+    font-size: 26rpx;
+    color: #c0c4cc;
+}
+
+/* 联系卡 */
+.contact-card {
+    margin: 20rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 22rpx 24rpx;
+}
+.contact-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+    margin-bottom: 16rpx;
+}
+.contact-title {
+    font-size: 28rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.contact-sub {
+    font-size: 22rpx;
+    color: #909399;
+}
+
+.contact-input {
+    width: 100%;
+    min-height: 160rpx;
+    padding: 16rpx;
+    background: #fafbfc;
+    border: 1rpx solid #ebeef5;
+    border-radius: 12rpx;
+    font-size: 26rpx;
+    color: #303133;
+    box-sizing: border-box;
+    margin-bottom: 14rpx;
+}
+.contact-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.contact-counter {
+    font-size: 22rpx;
+    color: #c0c4cc;
+}
+.contact-btn {
+    padding: 14rpx 36rpx;
+    background: #1a73e8;
+    border-radius: 12rpx;
+}
+.contact-btn.disabled {
+    background: #c0c4cc;
+}
+.contact-btn-text {
+    font-size: 26rpx;
+    color: #fff;
+    font-weight: 700;
+}
+
+.bottom-spacer { height: 40rpx; }
+</style>

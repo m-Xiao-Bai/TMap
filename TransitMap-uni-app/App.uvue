@@ -1,0 +1,48 @@
+<script>
+    import { loadConfig } from '@/utils/config'
+
+    export default {
+        onLaunch() {
+            // 启动时拉取系统配置
+            loadConfig()
+        },
+        onShow() {},
+        onHide() {}
+    }
+</script>
+
+<style>
+    /* 全局变量 */
+    page {
+        --primary: #1a73e8;
+        --primary-light: #e8f0fe;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #f43f5e;
+        --text-1: #1a1a2e;
+        --text-2: #303133;
+        --text-3: #606266;
+        --text-4: #909399;
+        --text-5: #c0c4cc;
+        --bg-page: #f7f8fa;
+        --bg-card: #ffffff;
+        --bg-soft: #f5f7fa;
+        --border: #ebeef5;
+        --border-soft: #f0f2f5;
+
+        background-color: #f7f8fa;
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        font-size: 28rpx;
+        color: #303133;
+    }
+
+    /* 通用 flex 工具 */
+    .flex-row { display: flex; flex-direction: row; }
+    .flex-col { display: flex; flex-direction: column; }
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; }
+    .flex-1 { flex: 1; }
+
+    /* 安全区域 */
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+</style>

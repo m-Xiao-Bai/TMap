@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mu.transitmap.mapper.CountryMapper">
+
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.mu.transitmap.entity.Country">
+        <id column="id" property="id" />
+        <result column="country_name" property="countryName" />
+        <result column="country_name_en" property="countryNameEn" />
+        <result column="country_alias" property="countryAlias" />
+        <result column="city_count" property="cityCount" />
+        <result column="metro_line_count" property="metroLineCount" />
+        <result column="metro_station_count" property="metroStationCount" />
+        <result column="metro_km" property="metroKm" />
+        <result column="hsr_station_count" property="hsrStationCount" />
+        <result column="hsr_km" property="hsrKm" />
+        <result column="status" property="status" />
+        <result column="status_code" property="statusCode" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+        <result column="extra" property="extra" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, country_name, country_name_en, country_alias, city_count, metro_line_count, metro_station_count, metro_km, hsr_station_count, hsr_km, status, status_code, created_at, updated_at, extra
+    </sql>
+
+</mapper>

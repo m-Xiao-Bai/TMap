@@ -1,0 +1,450 @@
+<template>
+    <view class="qr-page">
+        <view class="loading-wrap" v-if="loading">
+            <text class="loading-text">加载中...</text>
+        </view>
+
+        <view class="content" v-else-if="order">
+            <!-- 顶部品牌 -->
+            <view class="brand-section">
+                <view class="brand-mark">
+                    <text class="brand-text">METRO</text>
+                </view>
+                <text class="brand-sub">扫码进站</text>
+            </view>
+
+            <!-- 起终站 -->
+            <view class="route-section">
+                <text class="route-name">{{ order.startStationName }}</text>
+                <view class="route-arrow">
+                    <view class="route-line"></view>
+                    <text class="route-arrow-icon">→</text>
+                    <view class="route-line"></view>
+                </view>
+                <text class="route-name">{{ order.endStationName }}</text>
+            </view>
+
+            <!-- 二维码主体 -->
+            <view class="qr-card">
+                <view class="qr-corner qr-corner-tl"></view>
+                <view class="qr-corner qr-corner-tr"></view>
+                <view class="qr-corner qr-corner-bl"></view>
+                <view class="qr-corner qr-corner-br"></view>
+
+                <view class="qr-image-wrap" v-if="qrImage">
+                    <image class="qr-image" :src="qrImage" mode="aspectFit"></image>
+                </view>
+                <view class="qr-empty-wrap" v-else>
+                    <text class="qr-empty-icon">⌛</text>
+                    <text class="qr-empty-text">点击下方刷新生成二维码</text>
+                </view>
+
+                <view class="qr-tag">
+                    <text class="qr-tag-text">单程车票</text>
+                </view>
+            </view>
+
+            <!-- 倒计时 -->
+            <view class="countdown" v-if="qrImage && remainingSeconds > 0">
+                <text class="cd-label">剩余有效期</text>
+                <text class="cd-value">{{ formatRemaining }}</text>
+            </view>
+            <view class="countdown countdown-expired" v-else-if="qrImage">
+                <text class="cd-expired">二维码已过期，请刷新</text>
+            </view>
+
+            <!-- 票价 / 站数 -->
+            <view class="info-row">
+                <view class="info-item">
+                    <text class="info-value">{{ order.stationCount }}</text>
+                    <text class="info-label">站</text>
+                </view>
+                <view class="info-divider"></view>
+                <view class="info-item">
+                    <text class="info-value">¥{{ order.price }}</text>
+                    <text class="info-label">票价</text>
+                </view>
+            </view>
+
+            <!-- 操作 -->
+            <view class="action-row">
+                <view class="ar-btn ar-refresh" @tap="refreshQr">
+                    <text class="ar-icon">⟳</text>
+                    <text class="ar-text">刷新二维码</text>
+                </view>
+            </view>
+
+            <text class="hint">将屏幕调亮，对准闸机扫码区域</text>
+        </view>
+
+        <view v-else>
+            <empty-state title="订单不存在" actionText="返回" @action="goBack" />
+        </view>
+    </view>
+</template>
+
+<script>
+    import { getMyTicketOrders, refreshQrCode } from '@/api/ticket'
+    import EmptyState from '@/components/empty-state.uvue'
+
+    export default {
+        components: { EmptyState },
+        data() {
+            return {
+                orderId: null,
+                order: null,
+                loading: true,
+                qrImage: '',
+                expireTime: null,
+                remainingSeconds: 0,
+                tickTimer: null,
+                originalBrightness: 0
+            }
+        },
+        computed: {
+            formatRemaining() {
+                const m = Math.floor(this.remainingSeconds / 60)
+                const s = this.remainingSeconds % 60
+                return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+            }
+        },
+        onLoad(options) {
+            if (options && options.id) {
+                this.orderId = options.id
+                this.loadOrder()
+            } else {
+                this.loading = false
+            }
+            // 屏幕调到最亮
+            try {
+                uni.getScreenBrightness({
+                    success: r => { this.originalBrightness = r.value }
+                })
+                uni.setScreenBrightness({ value: 1.0 })
+            } catch {}
+        },
+        onUnload() {
+            if (this.tickTimer) clearInterval(this.tickTimer)
+            try {
+                if (this.originalBrightness > 0) {
+                    uni.setScreenBrightness({ value: this.originalBrightness })
+                }
+            } catch {}
+        },
+        methods: {
+            goBack() { uni.navigateBack() },
+            async loadOrder() {
+                this.loading = true
+                try {
+                    const res = await getMyTicketOrders()
+                    if (res.code === 200) {
+                        const list = res.data || []
+                        this.order = list.find(o => String(o.id) === String(this.orderId))
+                        if (this.order) {
+                            if (this.order.qrCodeImage) this.qrImage = this.order.qrCodeImage
+                            if (this.order.qrCodeExpireTime) {
+                                this.expireTime = this.order.qrCodeExpireTime
+                                this.startCountdown()
+                            } else {
+                                // 自动刷新一次
+                                await this.refreshQr(true)
+                            }
+                        }
+                    }
+                } catch {} finally { this.loading = false }
+            },
+            async refreshQr(silent) {
+                try {
+                    const res = await refreshQrCode({ orderId: this.order.id })
+                    if (res.code === 200) {
+                        this.qrImage = res.data.qrCodeImage
+                        this.expireTime = res.data.qrCodeExpireTime
+                        this.startCountdown()
+                        if (!silent) uni.showToast({ title: '已刷新', icon: 'success' })
+                    }
+                } catch {}
+            },
+            startCountdown() {
+                if (this.tickTimer) clearInterval(this.tickTimer)
+                this.updateRemaining()
+                this.tickTimer = setInterval(() => this.updateRemaining(), 1000)
+            },
+            updateRemaining() {
+                if (!this.expireTime) {
+                    this.remainingSeconds = 0
+                    return
+                }
+                const expire = typeof this.expireTime === 'string'
+                    ? new Date(this.expireTime.replace(' ', 'T')).getTime()
+                    : new Date(this.expireTime).getTime()
+                const diff = Math.floor((expire - Date.now()) / 1000)
+                this.remainingSeconds = Math.max(0, diff)
+                if (this.remainingSeconds === 0 && this.tickTimer) {
+                    clearInterval(this.tickTimer)
+                    this.tickTimer = null
+                }
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.qr-page {
+    min-height: 100vh;
+    background: #fff;
+    padding: 40rpx 24rpx 60rpx;
+}
+
+.loading-wrap {
+    padding: 200rpx 0;
+    text-align: center;
+}
+.loading-text {
+    font-size: 26rpx;
+    color: #c0c4cc;
+}
+
+/* 品牌 */
+.brand-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12rpx;
+    margin-bottom: 40rpx;
+}
+.brand-mark {
+    background: #1a73e8;
+    padding: 10rpx 24rpx;
+    border-radius: 8rpx;
+}
+.brand-text {
+    font-size: 26rpx;
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 6rpx;
+}
+.brand-sub {
+    font-size: 24rpx;
+    color: #909399;
+    font-weight: 600;
+    letter-spacing: 4rpx;
+}
+
+/* 路线 */
+.route-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20rpx;
+    margin-bottom: 40rpx;
+    padding: 0 24rpx;
+}
+.route-name {
+    font-size: 36rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+}
+.route-arrow {
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+    flex-shrink: 0;
+}
+.route-line {
+    width: 32rpx;
+    height: 2rpx;
+    background: #1a73e8;
+}
+.route-arrow-icon {
+    font-size: 28rpx;
+    color: #1a73e8;
+    font-weight: 800;
+}
+
+/* 二维码 */
+.qr-card {
+    width: 560rpx;
+    height: 560rpx;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 24rpx;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8rpx 40rpx rgba(0, 0, 0, 0.08);
+}
+.qr-corner {
+    position: absolute;
+    width: 40rpx;
+    height: 40rpx;
+}
+.qr-corner-tl {
+    top: 16rpx; left: 16rpx;
+    border-top: 6rpx solid #1a73e8;
+    border-left: 6rpx solid #1a73e8;
+    border-radius: 8rpx 0 0 0;
+}
+.qr-corner-tr {
+    top: 16rpx; right: 16rpx;
+    border-top: 6rpx solid #1a73e8;
+    border-right: 6rpx solid #1a73e8;
+    border-radius: 0 8rpx 0 0;
+}
+.qr-corner-bl {
+    bottom: 16rpx; left: 16rpx;
+    border-bottom: 6rpx solid #1a73e8;
+    border-left: 6rpx solid #1a73e8;
+    border-radius: 0 0 0 8rpx;
+}
+.qr-corner-br {
+    bottom: 16rpx; right: 16rpx;
+    border-bottom: 6rpx solid #1a73e8;
+    border-right: 6rpx solid #1a73e8;
+    border-radius: 0 0 8rpx 0;
+}
+.qr-image-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.qr-image {
+    width: 460rpx;
+    height: 460rpx;
+}
+.qr-empty-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16rpx;
+}
+.qr-empty-icon {
+    font-size: 80rpx;
+    opacity: 0.4;
+}
+.qr-empty-text {
+    font-size: 24rpx;
+    color: #909399;
+}
+.qr-tag {
+    position: absolute;
+    bottom: 32rpx;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    padding: 4rpx 16rpx;
+    border-radius: 4rpx;
+    border: 1rpx solid #ebeef5;
+}
+.qr-tag-text {
+    font-size: 18rpx;
+    color: #909399;
+    font-weight: 700;
+    letter-spacing: 2rpx;
+}
+
+/* 倒计时 */
+.countdown {
+    margin: 32rpx auto 0;
+    padding: 14rpx 28rpx;
+    background: #f5f8ff;
+    border-radius: 30rpx;
+    display: inline-flex;
+    align-items: center;
+    gap: 12rpx;
+    align-self: center;
+}
+.cd-label {
+    font-size: 22rpx;
+    color: #606266;
+}
+.cd-value {
+    font-size: 28rpx;
+    color: #1a73e8;
+    font-weight: 800;
+    font-family: monospace;
+}
+.countdown-expired {
+    background: #fef2f2;
+}
+.cd-expired {
+    font-size: 24rpx;
+    color: #f43f5e;
+    font-weight: 700;
+}
+
+.qr-page > .content {
+    display: flex;
+    flex-direction: column;
+}
+.countdown {
+    align-self: center;
+}
+
+/* 信息行 */
+.info-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 60rpx;
+    margin: 36rpx auto 0;
+}
+.info-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4rpx;
+}
+.info-value {
+    font-size: 36rpx;
+    font-weight: 800;
+    color: #1a1a2e;
+    line-height: 1.1;
+}
+.info-label {
+    font-size: 22rpx;
+    color: #909399;
+}
+.info-divider {
+    width: 1rpx;
+    height: 40rpx;
+    background: #ebeef5;
+}
+
+/* 操作 */
+.action-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 40rpx;
+}
+.ar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+    padding: 16rpx 36rpx;
+    background: #f5f8ff;
+    border-radius: 30rpx;
+    border: 1rpx solid #d2e3fc;
+}
+.ar-icon {
+    font-size: 24rpx;
+    color: #1a73e8;
+    font-weight: 800;
+}
+.ar-text {
+    font-size: 24rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+
+.hint {
+    text-align: center;
+    font-size: 22rpx;
+    color: #909399;
+    margin-top: 28rpx;
+}
+</style>

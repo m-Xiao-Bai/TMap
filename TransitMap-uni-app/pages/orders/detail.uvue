@@ -1,0 +1,857 @@
+<template>
+    <view class="detail-page">
+        <view class="loading-wrap" v-if="loading">
+            <text class="loading-text">加载中...</text>
+        </view>
+
+        <view class="content" v-else-if="order">
+            <!-- 状态横幅 -->
+            <view class="status-banner" :style="{ background: status.bg }">
+                <view class="sb-left">
+                    <view class="sb-icon-wrap" :style="{ background: status.color }">
+                        <text class="sb-icon">{{ statusIcon }}</text>
+                    </view>
+                    <view class="sb-text-wrap">
+                        <text class="sb-title" :style="{ color: status.color }">{{ status.text }}</text>
+                        <text class="sb-sub">{{ statusSub }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 车票主卡 -->
+            <view class="ticket-card">
+                <!-- 顶部撕齿 -->
+                <view class="tk-perf tk-perf-top">
+                    <view class="tp-hole" v-for="i in 16" :key="i"></view>
+                </view>
+
+                <!-- 票面 -->
+                <view class="tk-body">
+                    <!-- 标识 -->
+                    <view class="tk-brand">
+                        <view class="tk-brand-mark">
+                            <text class="tk-brand-text">METRO</text>
+                        </view>
+                        <text class="tk-brand-sub">单程车票</text>
+                    </view>
+
+                    <!-- 起终站 -->
+                    <view class="tk-route">
+                        <view class="tk-route-side">
+                            <text class="tk-route-label">出发</text>
+                            <text class="tk-route-name">{{ order.startStationName }}</text>
+                        </view>
+                        <view class="tk-route-mid">
+                            <view class="tk-route-line"></view>
+                            <view class="tk-route-circle">
+                                <text class="tk-route-circle-text">{{ order.stationCount }}</text>
+                                <text class="tk-route-circle-unit">站</text>
+                            </view>
+                            <view class="tk-route-line"></view>
+                        </view>
+                        <view class="tk-route-side tk-route-side-end">
+                            <text class="tk-route-label">到达</text>
+                            <text class="tk-route-name">{{ order.endStationName }}</text>
+                        </view>
+                    </view>
+
+                    <!-- 数据 -->
+                    <view class="tk-meta">
+                        <view class="tk-meta-item">
+                            <text class="tk-meta-value">{{ calcMin(order.stationCount) }}</text>
+                            <text class="tk-meta-label">分钟</text>
+                        </view>
+                        <view class="tk-meta-divider"></view>
+                        <view class="tk-meta-item">
+                            <text class="tk-meta-value">{{ calcDist(order.stationCount) }}</text>
+                            <text class="tk-meta-label">公里</text>
+                        </view>
+                        <view class="tk-meta-divider"></view>
+                        <view class="tk-meta-item">
+                            <text class="tk-meta-value tk-meta-price">¥{{ order.price }}</text>
+                            <text class="tk-meta-label">票价</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 中间撕齿 + 二维码（已支付/已使用） -->
+                <view v-if="hasQrCode">
+                    <view class="tk-perf tk-perf-middle">
+                        <view class="tp-hole" v-for="i in 16" :key="i"></view>
+                    </view>
+
+                    <view class="tk-qr-section">
+                        <view class="qr-header">
+                            <text class="qr-title">{{ order.status === 1 ? '进站二维码' : '已使用' }}</text>
+                            <view class="qr-refresh" v-if="order.status === 1" @tap="refreshQr">
+                                <text class="qr-refresh-text">⟳ 刷新</text>
+                            </view>
+                        </view>
+
+                        <view class="qr-wrap" :class="{ used: order.status === 2 }" @tap="goFullQr" v-if="qrImage || order.qrCodeImage">
+                            <image class="qr-image" :src="qrImage || order.qrCodeImage" mode="aspectFit"></image>
+                            <view class="qr-overlay" v-if="order.status === 2">
+                                <text class="qr-overlay-text">已使用</text>
+                            </view>
+                        </view>
+                        <view class="qr-wrap qr-empty" v-else>
+                            <text class="qr-empty-text">点击刷新生成二维码</text>
+                        </view>
+
+                        <text class="qr-hint" v-if="order.status === 1">点击二维码可放大显示</text>
+                    </view>
+                </view>
+
+                <!-- 底部撕齿 -->
+                <view class="tk-perf tk-perf-bottom">
+                    <view class="tp-hole" v-for="i in 16" :key="i"></view>
+                </view>
+
+                <!-- 底部信息 -->
+                <view class="tk-footer">
+                    <view class="tk-footer-row">
+                        <text class="tk-footer-label">订单号</text>
+                        <text class="tk-footer-value">{{ order.orderNo }}</text>
+                    </view>
+                    <view class="tk-footer-row">
+                        <text class="tk-footer-label">下单时间</text>
+                        <text class="tk-footer-value">{{ formatTime(order.createTime) }}</text>
+                    </view>
+                    <view class="tk-footer-row" v-if="order.payTime">
+                        <text class="tk-footer-label">支付时间</text>
+                        <text class="tk-footer-value">{{ formatTime(order.payTime) }}</text>
+                    </view>
+                    <view class="tk-footer-row" v-if="order.useTime">
+                        <text class="tk-footer-label">核销时间</text>
+                        <text class="tk-footer-value">{{ formatTime(order.useTime) }}</text>
+                    </view>
+                    <view class="tk-footer-row" v-if="order.qrCodeExpireTime && order.status === 1">
+                        <text class="tk-footer-label">二维码有效期</text>
+                        <text class="tk-footer-value tk-footer-warn">{{ formatTime(order.qrCodeExpireTime) }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 途经站点 -->
+            <view class="path-card" v-if="passedStationList.length">
+                <view class="path-header">
+                    <text class="path-title">途经站点</text>
+                    <text class="path-count">{{ passedStationList.length }} 站</text>
+                </view>
+                <view class="path-timeline">
+                    <view class="path-item" v-for="(name, idx) in passedStationList" :key="idx">
+                        <view class="path-dot-wrap">
+                            <view class="path-dot" :class="{ start: idx === 0, end: idx === passedStationList.length - 1 }"></view>
+                            <view class="path-line" v-if="idx < passedStationList.length - 1"></view>
+                        </view>
+                        <view class="path-content">
+                            <text class="path-name">{{ name }}</text>
+                            <text class="path-tag" v-if="idx === 0">出发</text>
+                            <text class="path-tag path-tag-end" v-if="idx === passedStationList.length - 1">到达</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 退票原因（审核中） -->
+            <view class="refund-card" v-if="order.status === 5">
+                <view class="rf-header">
+                    <text class="rf-title">退票申请</text>
+                    <view class="rf-status">
+                        <text class="rf-status-text">审核中</text>
+                    </view>
+                </view>
+                <view class="rf-row">
+                    <text class="rf-label">退票原因</text>
+                    <text class="rf-value">{{ order.refundReason || '用户主动退票' }}</text>
+                </view>
+                <view class="rf-row" v-if="order.refundApplyTime">
+                    <text class="rf-label">申请时间</text>
+                    <text class="rf-value">{{ formatTime(order.refundApplyTime) }}</text>
+                </view>
+                <text class="rf-hint">管理员将在 1-3 个工作日内完成审核</text>
+            </view>
+
+            <!-- 退票完成 -->
+            <view class="refund-card" v-if="order.status === 4">
+                <view class="rf-header">
+                    <text class="rf-title">退票详情</text>
+                    <view class="rf-status rf-status-done">
+                        <text class="rf-status-text">已退款</text>
+                    </view>
+                </view>
+                <view class="rf-row" v-if="order.refundReason">
+                    <text class="rf-label">退票原因</text>
+                    <text class="rf-value">{{ order.refundReason }}</text>
+                </view>
+                <view class="rf-row" v-if="order.refundTime">
+                    <text class="rf-label">退款时间</text>
+                    <text class="rf-value">{{ formatTime(order.refundTime) }}</text>
+                </view>
+            </view>
+
+            <view class="bottom-spacer"></view>
+        </view>
+
+        <view v-else>
+            <empty-state title="订单不存在" sub="请返回订单列表查看" actionText="返回" @action="goBack" />
+        </view>
+
+        <!-- 底部固定操作栏 -->
+        <view class="action-bar safe-bottom" v-if="order && actionButtons.length">
+            <view class="ab-btn" v-for="btn in actionButtons" :key="btn.key"
+                  :class="['ab-btn-' + btn.style]"
+                  @tap="handleAction(btn.key)">
+                <text class="ab-btn-text" :class="['ab-btn-text-' + btn.style]">{{ btn.label }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script>
+    import { getMyTicketOrders, payTicketOrder, cancelTicketOrder, refreshQrCode } from '@/api/ticket'
+    import { useUserStore } from '@/store/user'
+    import { getOrderStatus, formatTime } from '@/utils/format'
+    import { calcMinutes, calcKm } from '@/utils/config'
+    import EmptyState from '@/components/empty-state.uvue'
+
+    const userStore = useUserStore()
+
+    export default {
+        components: { EmptyState },
+        data() {
+            return {
+                orderId: null,
+                order: null,
+                loading: true,
+                qrImage: ''
+            }
+        },
+        computed: {
+            status() {
+                return this.order ? getOrderStatus(this.order.status) : { text: '', color: '', bg: '' }
+            },
+            statusIcon() {
+                if (!this.order) return ''
+                const map = {
+                    0: '⏳', 1: '✓', 2: '✓', 3: '✕', 4: '↩', 5: '⏳'
+                }
+                return map[this.order.status] || ''
+            },
+            statusSub() {
+                if (!this.order) return ''
+                const map = {
+                    0: '请尽快完成支付',
+                    1: '请使用二维码进站',
+                    2: '行程已完成',
+                    3: '订单已过期',
+                    4: '退款已退回原账户',
+                    5: '管理员审核中'
+                }
+                return map[this.order.status] || ''
+            },
+            hasQrCode() {
+                return this.order && (this.order.status === 1 || this.order.status === 2)
+            },
+            passedStationList() {
+                if (!this.order || !this.order.passedStationNames) return []
+                if (Array.isArray(this.order.passedStationNames)) return this.order.passedStationNames
+                try { return JSON.parse(this.order.passedStationNames) } catch { return [] }
+            },
+            actionButtons() {
+                if (!this.order) return []
+                const s = Number(this.order.status)
+                const btns = []
+                if (s === 0) {
+                    btns.push({ key: 'cancel', label: '取消订单', style: 'ghost' })
+                    btns.push({ key: 'pay', label: '立即支付', style: 'primary' })
+                } else if (s === 1) {
+                    btns.push({ key: 'refund', label: '申请退票', style: 'ghost' })
+                    btns.push({ key: 'qr', label: '扫码进站', style: 'primary' })
+                }
+                return btns
+            }
+        },
+        onLoad(options) {
+            if (options && options.id) {
+                this.orderId = options.id
+                this.loadOrder()
+            } else {
+                this.loading = false
+            }
+        },
+        onShow() {
+            if (this.orderId && this.order) this.loadOrder()
+        },
+        methods: {
+            formatTime,
+            calcMin(stops) { return calcMinutes(stops || 0) },
+            calcDist(stops) { return calcKm(stops || 0) },
+            goBack() { uni.navigateBack() },
+            async loadOrder() {
+                this.loading = true
+                try {
+                    const res = await getMyTicketOrders()
+                    if (res.code === 200) {
+                        const list = res.data || []
+                        this.order = list.find(o => String(o.id) === String(this.orderId))
+                        if (this.order && this.order.qrCodeImage) {
+                            this.qrImage = this.order.qrCodeImage
+                        }
+                    }
+                } catch {} finally { this.loading = false }
+            },
+            async refreshQr() {
+                try {
+                    const res = await refreshQrCode({ orderId: this.order.id })
+                    if (res.code === 200) {
+                        this.qrImage = res.data.qrCodeImage
+                        if (res.data.qrCodeExpireTime) {
+                            this.order.qrCodeExpireTime = res.data.qrCodeExpireTime
+                        }
+                        uni.showToast({ title: '已刷新', icon: 'success' })
+                    }
+                } catch {}
+            },
+            goFullQr() {
+                if (!this.qrImage && !this.order.qrCodeImage) return
+                uni.navigateTo({ url: '/pages/orders/qrcode?id=' + this.order.id })
+            },
+            handleAction(key) {
+                if (key === 'pay') return this.handlePay()
+                if (key === 'cancel') return this.handleCancel()
+                if (key === 'refund') return this.handleRefund()
+                if (key === 'qr') return this.goFullQr()
+            },
+            handlePay() {
+                uni.showModal({
+                    title: '确认支付', content: `支付 ¥${this.order.price}？`,
+                    success: async r => {
+                        if (!r.confirm) return
+                        try {
+                            const res = await payTicketOrder({ orderId: this.order.id })
+                            if (res.code === 200) {
+                                uni.showToast({ title: '支付成功', icon: 'success' })
+                                this.loadOrder()
+                            }
+                        } catch {}
+                    }
+                })
+            },
+            handleCancel() {
+                uni.showModal({
+                    title: '取消订单', content: '确定要取消这个订单吗？',
+                    success: async r => {
+                        if (!r.confirm) return
+                        try {
+                            const res = await cancelTicketOrder({ orderId: this.order.id })
+                            if (res.code === 200) {
+                                uni.showToast({ title: '已取消', icon: 'success' })
+                                setTimeout(() => uni.navigateBack(), 800)
+                            }
+                        } catch {}
+                    }
+                })
+            },
+            handleRefund() {
+                uni.navigateTo({ url: '/pages/orders/refund?id=' + this.order.id })
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.detail-page {
+    min-height: 100vh;
+    background: #f7f8fa;
+    padding-bottom: 140rpx;
+}
+
+.loading-wrap {
+    padding: 100rpx 0;
+    text-align: center;
+}
+.loading-text {
+    font-size: 26rpx;
+    color: #c0c4cc;
+}
+
+/* 状态横幅 */
+.status-banner {
+    margin: 24rpx 24rpx 0;
+    border-radius: 16rpx;
+    padding: 20rpx;
+    display: flex;
+    align-items: center;
+}
+.sb-left {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    flex: 1;
+}
+.sb-icon-wrap {
+    width: 56rpx;
+    height: 56rpx;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sb-icon {
+    font-size: 28rpx;
+    color: #fff;
+    font-weight: 700;
+}
+.sb-text-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2rpx;
+}
+.sb-title {
+    font-size: 30rpx;
+    font-weight: 800;
+}
+.sb-sub {
+    font-size: 22rpx;
+    color: #606266;
+}
+
+/* 车票主卡 */
+.ticket-card {
+    margin: 16rpx 24rpx 0;
+    background: #fff;
+    border-radius: 20rpx;
+    border: 1rpx solid #ebeef5;
+    overflow: hidden;
+}
+.tk-perf {
+    height: 16rpx;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4rpx;
+    background: #fff;
+}
+.tk-perf-top { border-bottom: 1rpx dashed #d0d7de; }
+.tk-perf-middle { border-top: 1rpx dashed #d0d7de; border-bottom: 1rpx dashed #d0d7de; }
+.tk-perf-bottom { border-top: 1rpx dashed #d0d7de; }
+.tp-hole {
+    width: 10rpx;
+    height: 10rpx;
+    background: #f7f8fa;
+    border-radius: 50%;
+}
+
+.tk-body { padding: 24rpx; }
+
+/* Brand */
+.tk-brand {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    margin-bottom: 20rpx;
+}
+.tk-brand-mark {
+    background: #1a73e8;
+    padding: 6rpx 14rpx;
+    border-radius: 6rpx;
+}
+.tk-brand-text {
+    font-size: 22rpx;
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 4rpx;
+}
+.tk-brand-sub {
+    font-size: 22rpx;
+    color: #909399;
+    font-weight: 600;
+}
+
+/* 路线 */
+.tk-route {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    padding: 16rpx 0;
+    border-top: 1rpx dashed #f0f2f5;
+    border-bottom: 1rpx dashed #f0f2f5;
+}
+.tk-route-side {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+}
+.tk-route-side-end {
+    align-items: flex-end;
+}
+.tk-route-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.tk-route-name {
+    font-size: 36rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.tk-route-side-end .tk-route-name { text-align: right; }
+.tk-route-mid {
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+    flex-shrink: 0;
+}
+.tk-route-line {
+    width: 24rpx;
+    height: 2rpx;
+    background: #1a73e8;
+}
+.tk-route-circle {
+    width: 56rpx;
+    height: 56rpx;
+    border-radius: 50%;
+    background: #1a73e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.tk-route-circle-text {
+    font-size: 22rpx;
+    color: #fff;
+    font-weight: 800;
+    line-height: 1;
+}
+.tk-route-circle-unit {
+    font-size: 14rpx;
+    color: #fff;
+    line-height: 1;
+}
+
+/* 数据 */
+.tk-meta {
+    display: flex;
+    align-items: center;
+    padding: 18rpx 0 0;
+}
+.tk-meta-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6rpx;
+}
+.tk-meta-value {
+    font-size: 32rpx;
+    font-weight: 800;
+    color: #303133;
+    line-height: 1.1;
+}
+.tk-meta-price { color: #1a73e8; }
+.tk-meta-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.tk-meta-divider {
+    width: 1rpx;
+    height: 36rpx;
+    background: #ebeef5;
+}
+
+/* 二维码 */
+.tk-qr-section { padding: 28rpx 24rpx; }
+.qr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20rpx;
+}
+.qr-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.qr-refresh {
+    padding: 6rpx 14rpx;
+    background: #f5f8ff;
+    border-radius: 10rpx;
+}
+.qr-refresh-text {
+    font-size: 22rpx;
+    color: #1a73e8;
+    font-weight: 600;
+}
+
+.qr-wrap {
+    width: 360rpx;
+    height: 360rpx;
+    margin: 0 auto;
+    background: #fff;
+    border: 2rpx solid #ebeef5;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+.qr-image {
+    width: 320rpx;
+    height: 320rpx;
+}
+.qr-wrap.used .qr-image {
+    opacity: 0.3;
+}
+.qr-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.qr-overlay-text {
+    font-size: 36rpx;
+    color: #909399;
+    font-weight: 800;
+    border: 4rpx solid #909399;
+    padding: 12rpx 28rpx;
+    border-radius: 16rpx;
+    transform: rotate(-15deg);
+    letter-spacing: 4rpx;
+}
+.qr-empty {
+    background: #f7f8fa;
+}
+.qr-empty-text {
+    font-size: 24rpx;
+    color: #909399;
+}
+.qr-hint {
+    text-align: center;
+    font-size: 22rpx;
+    color: #909399;
+    display: block;
+    margin-top: 14rpx;
+}
+
+/* 底部信息 */
+.tk-footer {
+    padding: 20rpx 24rpx;
+    background: #fafbfc;
+}
+.tk-footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6rpx 0;
+}
+.tk-footer-label {
+    font-size: 22rpx;
+    color: #909399;
+}
+.tk-footer-value {
+    font-size: 22rpx;
+    color: #606266;
+    font-weight: 500;
+}
+.tk-footer-warn {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+/* 途经站点 */
+.path-card {
+    margin: 16rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 20rpx 24rpx;
+}
+.path-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16rpx;
+}
+.path-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.path-count {
+    font-size: 22rpx;
+    color: #1a73e8;
+    background: #e8f0fe;
+    padding: 4rpx 12rpx;
+    border-radius: 10rpx;
+    font-weight: 600;
+}
+.path-timeline { padding: 4rpx 0; }
+.path-item {
+    display: flex;
+    gap: 16rpx;
+}
+.path-dot-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+}
+.path-dot {
+    width: 18rpx;
+    height: 18rpx;
+    border-radius: 50%;
+    background: #fff;
+    border: 4rpx solid #1a73e8;
+    flex-shrink: 0;
+}
+.path-dot.start {
+    border-color: #34a853;
+    background: #34a853;
+}
+.path-dot.end {
+    border-color: #ea4335;
+    background: #ea4335;
+}
+.path-line {
+    flex: 1;
+    width: 2rpx;
+    min-height: 24rpx;
+    background: #d0d7de;
+}
+.path-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    padding: 0 0 18rpx;
+    min-height: 40rpx;
+}
+.path-name {
+    font-size: 28rpx;
+    color: #303133;
+    font-weight: 600;
+}
+.path-tag {
+    font-size: 18rpx;
+    color: #34a853;
+    font-weight: 700;
+    background: #d1fae5;
+    padding: 2rpx 10rpx;
+    border-radius: 8rpx;
+}
+.path-tag-end {
+    color: #ea4335;
+    background: #fee2e2;
+}
+
+/* 退票卡 */
+.refund-card {
+    margin: 16rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 20rpx 24rpx;
+}
+.rf-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16rpx;
+}
+.rf-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.rf-status {
+    background: rgba(245, 158, 11, 0.12);
+    padding: 4rpx 12rpx;
+    border-radius: 10rpx;
+}
+.rf-status-text {
+    font-size: 20rpx;
+    color: #f59e0b;
+    font-weight: 700;
+}
+.rf-status-done {
+    background: rgba(244, 63, 94, 0.12);
+}
+.rf-status-done .rf-status-text {
+    color: #f43f5e;
+}
+.rf-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8rpx 0;
+}
+.rf-label {
+    font-size: 24rpx;
+    color: #909399;
+    width: 160rpx;
+    flex-shrink: 0;
+}
+.rf-value {
+    font-size: 24rpx;
+    color: #303133;
+    font-weight: 500;
+    flex: 1;
+    text-align: right;
+}
+.rf-hint {
+    font-size: 22rpx;
+    color: #909399;
+    margin-top: 12rpx;
+    text-align: center;
+    display: block;
+    padding: 12rpx 0 0;
+    border-top: 1rpx dashed #f0f2f5;
+}
+
+.bottom-spacer { height: 40rpx; }
+
+/* 底部操作栏 */
+.action-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-top: 1rpx solid #ebeef5;
+    padding: 16rpx 24rpx;
+    display: flex;
+    gap: 12rpx;
+    z-index: 100;
+}
+.ab-btn {
+    flex: 1;
+    height: 88rpx;
+    border-radius: 14rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ab-btn-primary {
+    background: #1a73e8;
+}
+.ab-btn-text-primary {
+    color: #fff;
+    font-size: 30rpx;
+    font-weight: 700;
+}
+.ab-btn-ghost {
+    background: #fff;
+    border: 1rpx solid #ebeef5;
+}
+.ab-btn-text-ghost {
+    color: #606266;
+    font-size: 30rpx;
+    font-weight: 600;
+}
+</style>

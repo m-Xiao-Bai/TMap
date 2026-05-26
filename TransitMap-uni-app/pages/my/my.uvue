@@ -1,0 +1,592 @@
+<template>
+    <view class="my-page">
+        <!-- 用户卡片 -->
+        <view class="user-card" @tap="handleUserTap">
+            <view class="user-avatar-wrap">
+                <image class="user-avatar" v-if="avatarUrl" :src="avatarUrl" mode="aspectFill"></image>
+                <view class="user-avatar-default" v-else>
+                    <text class="user-avatar-icon">👤</text>
+                </view>
+            </view>
+            <view class="user-info" v-if="isLoggedIn">
+                <view class="user-name-row">
+                    <text class="user-name">{{ username }}</text>
+                    <view class="user-badge" v-if="roleCode === 1">
+                        <text class="user-badge-text">普通用户</text>
+                    </view>
+                    <view class="user-badge user-badge-vip" v-else-if="roleCode > 1">
+                        <text class="user-badge-text">管理员</text>
+                    </view>
+                </view>
+                <text class="user-sub">{{ userSub }}</text>
+            </view>
+            <view class="user-info" v-else>
+                <text class="user-name">点击登录</text>
+                <text class="user-sub">登录后查看订单与消息</text>
+            </view>
+            <text class="user-arrow">›</text>
+        </view>
+
+        <!-- 出行统计 -->
+        <view class="stats-card">
+            <view class="stats-title-row">
+                <text class="stats-title">出行统计</text>
+                <text class="stats-period">累计</text>
+            </view>
+            <view class="stats-row">
+                <view class="stat-cell">
+                    <text class="stat-value">{{ stats.total }}</text>
+                    <text class="stat-label">总行程</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-cell">
+                    <text class="stat-value">{{ stats.month }}</text>
+                    <text class="stat-label">本月</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-cell">
+                    <text class="stat-value stat-price">¥{{ stats.spent }}</text>
+                    <text class="stat-label">总花费</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 主功能 -->
+        <view class="menu-card">
+            <view class="menu-section-title">交通服务</view>
+            <view class="menu-list">
+                <view class="menu-item" @tap="goTicket">
+                    <view class="mi-icon-wrap" style="background:#e8f0fe">
+                        <text class="mi-icon">🎫</text>
+                    </view>
+                    <view class="mi-text-wrap">
+                        <text class="mi-text">购票</text>
+                        <text class="mi-sub">规划路线 · 一键购票</text>
+                    </view>
+                    <text class="mi-arrow">›</text>
+                </view>
+                <view class="menu-item" @tap="goOrders">
+                    <view class="mi-icon-wrap" style="background:#fef3c7">
+                        <text class="mi-icon">📋</text>
+                    </view>
+                    <view class="mi-text-wrap">
+                        <text class="mi-text">我的订单</text>
+                        <text class="mi-sub">查看历史订单</text>
+                    </view>
+                    <view class="mi-badge" v-if="pendingCount > 0">
+                        <text class="mi-badge-text">{{ pendingCount }}</text>
+                    </view>
+                    <text class="mi-arrow">›</text>
+                </view>
+                <view class="menu-item" @tap="goMessages">
+                    <view class="mi-icon-wrap" style="background:#cffafe">
+                        <text class="mi-icon">💬</text>
+                    </view>
+                    <view class="mi-text-wrap">
+                        <text class="mi-text">消息中心</text>
+                        <text class="mi-sub">订单通知 · 系统消息</text>
+                    </view>
+                    <view class="mi-badge" v-if="unreadCount > 0">
+                        <text class="mi-badge-text">{{ unreadCount }}</text>
+                    </view>
+                    <text class="mi-arrow">›</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 账户设置 -->
+        <view class="menu-card" v-if="isLoggedIn">
+            <view class="menu-section-title">账户设置</view>
+            <view class="menu-list">
+                <view class="menu-item" @tap="goProfile">
+                    <view class="mi-icon-wrap" style="background:#ede9fe">
+                        <text class="mi-icon">👤</text>
+                    </view>
+                    <view class="mi-text-wrap">
+                        <text class="mi-text">个人资料</text>
+                        <text class="mi-sub">头像 · 昵称 · 联系方式</text>
+                    </view>
+                    <text class="mi-arrow">›</text>
+                </view>
+                <view class="menu-item" @tap="goPassword">
+                    <view class="mi-icon-wrap" style="background:#f3f4f6">
+                        <text class="mi-icon">🔒</text>
+                    </view>
+                    <view class="mi-text-wrap">
+                        <text class="mi-text">修改密码</text>
+                        <text class="mi-sub">定期修改更安全</text>
+                    </view>
+                    <text class="mi-arrow">›</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 关于 -->
+        <view class="menu-card">
+            <view class="menu-section-title">关于</view>
+            <view class="menu-list">
+                <view class="menu-item" @tap="showAbout = true">
+                    <view class="mi-icon-wrap" style="background:#f1f5f9">
+                        <text class="mi-icon">ℹ</text>
+                    </view>
+                    <view class="mi-text-wrap">
+                        <text class="mi-text">关于我们</text>
+                        <text class="mi-sub">版本与团队信息</text>
+                    </view>
+                    <text class="mi-arrow">›</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 退出登录 -->
+        <view class="logout-section" v-if="isLoggedIn">
+            <view class="logout-btn" @tap="handleLogout">
+                <text class="logout-text">退出登录</text>
+            </view>
+        </view>
+
+        <view class="bottom-spacer"></view>
+
+        <!-- 关于弹窗 -->
+        <view class="popup-mask" v-if="showAbout" @tap="showAbout = false">
+            <view class="about-popup" @tap.stop>
+                <view class="about-icon-wrap">
+                    <text class="about-icon">🚇</text>
+                </view>
+                <text class="about-title">城市轨道交通</text>
+                <text class="about-version">v 1.0.0</text>
+                <text class="about-desc">便捷的城市轨道交通购票平台</text>
+                <view class="about-close" @tap="showAbout = false">
+                    <text class="about-close-text">确定</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script>
+    import { useUserStore } from '@/store/user'
+    import { userLogout } from '@/api/user'
+    import { getMessageUnreadCount } from '@/api/message'
+    import { getMyTicketOrders } from '@/api/ticket'
+    import { fullAvatarUrl } from '@/utils/format'
+
+    const userStore = useUserStore()
+
+    export default {
+        data() {
+            return {
+                isLoggedIn: false,
+                username: '',
+                userEmail: '',
+                userMobile: '',
+                roleCode: 0,
+                avatarUrl: '',
+                unreadCount: 0,
+                pendingCount: 0,
+                stats: { total: 0, month: 0, spent: '0.00' },
+                showAbout: false,
+                pollTimer: null
+            }
+        },
+        computed: {
+            userSub() {
+                return this.userEmail || this.userMobile || '已登录用户'
+            }
+        },
+        onLoad() {
+            this.refreshUserInfo()
+            this.fetchData()
+            this.pollTimer = setInterval(() => { this.fetchData() }, 30000)
+        },
+        onShow() {
+            this.refreshUserInfo()
+            this.fetchData()
+        },
+        onUnload() {
+            if (this.pollTimer) clearInterval(this.pollTimer)
+        },
+        methods: {
+            refreshUserInfo() {
+                this.isLoggedIn = userStore.isLoggedIn()
+                this.username = userStore.state.username || ''
+                this.userEmail = userStore.state.email || ''
+                this.userMobile = userStore.state.mobile || ''
+                this.roleCode = userStore.state.roleCode || 0
+                this.avatarUrl = fullAvatarUrl(userStore.state.avatar)
+            },
+            async fetchData() {
+                if (!this.isLoggedIn) {
+                    this.unreadCount = 0
+                    this.pendingCount = 0
+                    this.stats = { total: 0, month: 0, spent: '0.00' }
+                    return
+                }
+                this.fetchUnread()
+                this.fetchOrderStats()
+            },
+            async fetchUnread() {
+                try {
+                    const res = await getMessageUnreadCount()
+                    if (res.code === 200) this.unreadCount = res.data.count || 0
+                } catch {}
+            },
+            async fetchOrderStats() {
+                try {
+                    const res = await getMyTicketOrders()
+                    if (res.code !== 200) return
+                    const orders = res.data || []
+                    // 只统计已支付/已使用的
+                    const valid = orders.filter(o => Number(o.status) === 1 || Number(o.status) === 2)
+                    this.stats.total = valid.length
+                    const now = new Date()
+                    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+                    this.stats.month = valid.filter(o => {
+                        const t = o.payTime || o.createTime
+                        if (!t) return false
+                        const d = typeof t === 'string' ? new Date(t.replace(' ', 'T')).getTime() : new Date(t).getTime()
+                        return d >= monthStart
+                    }).length
+                    this.stats.spent = valid.reduce((s, o) => s + Number(o.price || 0), 0).toFixed(2)
+                    this.pendingCount = orders.filter(o => Number(o.status) === 0).length
+                } catch {}
+            },
+            handleUserTap() {
+                if (!this.isLoggedIn) {
+                    uni.navigateTo({ url: '/pages/login/login' })
+                } else {
+                    uni.navigateTo({ url: '/pages/my/profile' })
+                }
+            },
+            goLogin() { uni.navigateTo({ url: '/pages/login/login' }) },
+            goOrders() { uni.switchTab({ url: '/pages/orders/orders' }) },
+            goMessages() {
+                if (!this.isLoggedIn) {
+                    uni.showToast({ title: '请先登录', icon: 'none' }); return
+                }
+                uni.navigateTo({ url: '/pages/message/message' })
+            },
+            goTicket() { uni.navigateTo({ url: '/pages/ticket/ticket' }) },
+            goProfile() {
+                if (!this.isLoggedIn) {
+                    uni.showToast({ title: '请先登录', icon: 'none' }); return
+                }
+                uni.navigateTo({ url: '/pages/my/profile' })
+            },
+            goPassword() {
+                if (!this.isLoggedIn) {
+                    uni.showToast({ title: '请先登录', icon: 'none' }); return
+                }
+                uni.navigateTo({ url: '/pages/my/password' })
+            },
+            handleLogout() {
+                uni.showModal({
+                    title: '提示', content: '确定退出登录吗？',
+                    success: async res => {
+                        if (!res.confirm) return
+                        try { await userLogout() } catch {}
+                        userStore.clearUser()
+                        uni.showToast({ title: '已退出', icon: 'success' })
+                        this.refreshUserInfo()
+                        this.fetchData()
+                    }
+                })
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.my-page {
+    min-height: 100vh;
+    background: #f7f8fa;
+}
+
+/* 用户卡片 */
+.user-card {
+    display: flex;
+    align-items: center;
+    gap: 18rpx;
+    background: #fff;
+    margin: 24rpx 24rpx 0;
+    padding: 28rpx 24rpx;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+}
+.user-avatar-wrap { flex-shrink: 0; }
+.user-avatar {
+    width: 100rpx;
+    height: 100rpx;
+    border-radius: 28rpx;
+    background: #f5f7fa;
+}
+.user-avatar-default {
+    width: 100rpx;
+    height: 100rpx;
+    border-radius: 28rpx;
+    background: linear-gradient(135deg, #e8f0fe, #d2e3fc);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.user-avatar-icon { font-size: 48rpx; }
+.user-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+}
+.user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+}
+.user-name {
+    font-size: 32rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+}
+.user-badge {
+    background: #e8f0fe;
+    padding: 3rpx 10rpx;
+    border-radius: 6rpx;
+}
+.user-badge-vip {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+}
+.user-badge-text {
+    font-size: 18rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+.user-badge-vip .user-badge-text {
+    color: #b45309;
+}
+.user-sub {
+    font-size: 22rpx;
+    color: #909399;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.user-arrow {
+    font-size: 36rpx;
+    color: #c0c4cc;
+    font-weight: 300;
+}
+
+/* 出行统计 */
+.stats-card {
+    margin: 16rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 22rpx 24rpx;
+}
+.stats-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20rpx;
+}
+.stats-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.stats-period {
+    font-size: 20rpx;
+    color: #909399;
+    background: #f5f7fa;
+    padding: 4rpx 10rpx;
+    border-radius: 8rpx;
+}
+.stats-row {
+    display: flex;
+    align-items: center;
+}
+.stat-cell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6rpx;
+}
+.stat-value {
+    font-size: 36rpx;
+    font-weight: 800;
+    color: #1a1a2e;
+    line-height: 1.1;
+}
+.stat-price { color: #1a73e8; font-size: 32rpx; }
+.stat-label {
+    font-size: 22rpx;
+    color: #909399;
+}
+.stat-divider {
+    width: 1rpx;
+    height: 40rpx;
+    background: #ebeef5;
+}
+
+/* 菜单卡 */
+.menu-card {
+    margin: 16rpx 24rpx 0;
+}
+.menu-section-title {
+    font-size: 22rpx;
+    color: #909399;
+    font-weight: 700;
+    padding: 0 4rpx 12rpx;
+    letter-spacing: 1rpx;
+}
+.menu-list {
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    overflow: hidden;
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    padding: 22rpx 20rpx;
+    border-bottom: 1rpx solid #f5f7fa;
+}
+.menu-item:last-child { border-bottom: none; }
+.mi-icon-wrap {
+    width: 64rpx;
+    height: 64rpx;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.mi-icon { font-size: 28rpx; }
+.mi-text-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2rpx;
+}
+.mi-text {
+    font-size: 28rpx;
+    color: #303133;
+    font-weight: 600;
+}
+.mi-sub {
+    font-size: 20rpx;
+    color: #909399;
+}
+.mi-badge {
+    min-width: 32rpx;
+    height: 32rpx;
+    padding: 0 8rpx;
+    background: #f43f5e;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.mi-badge-text {
+    font-size: 18rpx;
+    color: #fff;
+    font-weight: 700;
+}
+.mi-arrow {
+    font-size: 32rpx;
+    color: #c0c4cc;
+    font-weight: 300;
+}
+
+/* 退出 */
+.logout-section {
+    margin: 32rpx 24rpx 0;
+}
+.logout-btn {
+    width: 100%;
+    height: 96rpx;
+    background: #fff;
+    border: 1rpx solid #ebeef5;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.logout-text {
+    font-size: 28rpx;
+    color: #f43f5e;
+    font-weight: 700;
+}
+
+.bottom-spacer { height: 60rpx; }
+
+/* 关于弹窗 */
+.popup-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+}
+.about-popup {
+    width: 560rpx;
+    background: #fff;
+    border-radius: 24rpx;
+    padding: 50rpx 40rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.about-icon-wrap {
+    width: 120rpx;
+    height: 120rpx;
+    background: linear-gradient(135deg, #1a73e8, #1565c0);
+    border-radius: 30rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24rpx;
+}
+.about-icon { font-size: 60rpx; }
+.about-title {
+    font-size: 32rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+}
+.about-version {
+    font-size: 22rpx;
+    color: #1a73e8;
+    background: #e8f0fe;
+    padding: 4rpx 14rpx;
+    border-radius: 10rpx;
+    margin-top: 12rpx;
+    font-weight: 700;
+}
+.about-desc {
+    font-size: 24rpx;
+    color: #606266;
+    margin-top: 24rpx;
+    text-align: center;
+}
+.about-close {
+    width: 100%;
+    height: 80rpx;
+    background: #1a73e8;
+    border-radius: 14rpx;
+    margin-top: 32rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.about-close-text {
+    font-size: 28rpx;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 4rpx;
+}
+</style>

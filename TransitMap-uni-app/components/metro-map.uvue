@@ -1,0 +1,477 @@
+<template>
+    <view class="map-wrap" :style="{ width: width + 'px', height: height + 'px' }">
+        <!-- 线路图：Canvas 手画，纯白底 -->
+        <canvas v-if="mapMode === 'schematic'"
+                canvas-id="metroCanvas"
+                id="metroCanvas"
+                class="metro-canvas"
+                :style="{ width: width + 'px', height: height + 'px' }"
+                @touchend="onCanvasTouch"
+                disable-scroll="true"></canvas>
+
+        <!-- 地理图：原生 map -->
+        <map v-else
+             id="metroMap"
+             class="metro-map"
+             :style="{ width: width + 'px', height: height + 'px' }"
+             :latitude="centerLat"
+             :longitude="centerLng"
+             :scale="mapScale"
+             :markers="mapMarkers"
+             :polyline="mapPolylines"
+             :include-points="fitPoints"
+             show-location="false"
+             enable-scroll="true"
+             enable-zoom="true"
+             enable-rotate="false"
+             @markertap="onMarkerTap"
+             @callouttap="onCalloutTap"></map>
+
+        <!-- 选中站点操作卡片 -->
+        <view class="station-action-card" v-if="selectedStation" @tap.stop>
+            <view class="sac-header">
+                <view class="sac-name-row">
+                    <text class="sac-name">{{ selectedStation.stationName }}</text>
+                    <text class="sac-line">{{ selectedStation._lineName }}</text>
+                </view>
+                <view class="sac-close" @tap="closeStationCard">
+                    <text class="sac-close-icon">✕</text>
+                </view>
+            </view>
+            <view class="sac-actions">
+                <view class="sac-btn start" @tap="selectAsStart">
+                    <text class="sac-btn-text">设为出发站</text>
+                </view>
+                <view class="sac-btn end" @tap="selectAsEnd">
+                    <text class="sac-btn-text">设为到达站</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script>
+    export default {
+        props: {
+            lines: { type: Array, default: () => [] },
+            allStations: { type: Array, default: () => [] },
+            orderedStationMap: { type: Object, default: () => ({}) },
+            mapMode: { type: String, default: 'schematic' },
+            startId: { type: [String, Number, null], default: null },
+            endId: { type: [String, Number, null], default: null },
+            routePath: { type: Array, default: () => [] },
+            highlightLineId: { type: [String, Number, null], default: null },
+            width: { type: Number, default: 375 },
+            height: { type: Number, default: 300 }
+        },
+        data() {
+            return {
+                centerLat: 39.9,
+                centerLng: 116.4,
+                mapScale: 12,
+                selectedStation: null,
+                projection: null,
+                _drawTimer: null
+            }
+        },
+        computed: {
+            validStations() {
+                const seen = new Set()
+                const result = []
+                const lines = Array.isArray(this.lines) ? this.lines : []
+                for (const line of lines) {
+                    const raw = this.orderedStationMap[line.id]
+                    const stations = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.stations) ? raw.stations : [])
+                    for (const s of stations) {
+                        const sid = String(s.id)
+                        if (seen.has(sid)) continue
+                        if (s.latitude == null || s.longitude == null) continue
+                        const lat = Number(s.latitude)
+                        const lng = Number(s.longitude)
+                        if (isNaN(lat) || isNaN(lng)) continue
+                        seen.add(sid)
+                        result.push({ ...s, _lat: lat, _lng: lng, _lineColor: line.lineColor || '#1a73e8', _lineName: line.lineName })
+                    }
+                }
+                return result
+            },
+            fitPoints() {
+                return this.validStations.map(s => ({ latitude: s._lat, longitude: s._lng }))
+            },
+            mapPolylines() {
+                const lines = []
+                const linesArr = Array.isArray(this.lines) ? this.lines : []
+                for (const line of linesArr) {
+                    const raw = this.orderedStationMap[line.id]
+                    const stations = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.stations) ? raw.stations : [])
+                    const points = stations
+                        .filter(s => s.latitude != null && s.longitude != null)
+                        .map(s => ({ latitude: Number(s.latitude), longitude: Number(s.longitude) }))
+                    if (points.length < 2) continue
+                    const color = line.lineColor || '#1a73e8'
+                    const dimmed = this.highlightLineId && this.highlightLineId !== line.id
+                    lines.push({
+                        points,
+                        color: dimmed ? '#d0d7de' : color,
+                        width: dimmed ? 3 : 5,
+                        arrowLine: false
+                    })
+                }
+                if (this.routePath && this.routePath.length >= 2) {
+                    const stationMap = {}
+                    for (const s of this.validStations) {
+                        stationMap[String(s.id)] = s
+                    }
+                    const routePoints = []
+                    for (const sid of this.routePath) {
+                        const s = stationMap[String(sid)]
+                        if (s) routePoints.push({ latitude: s._lat, longitude: s._lng })
+                    }
+                    if (routePoints.length >= 2) {
+                        lines.push({
+                            points: routePoints,
+                            color: '#ff6b35',
+                            width: 6,
+                            arrowLine: true
+                        })
+                    }
+                }
+                return lines
+            },
+            mapMarkers() {
+                const markers = []
+                const sidStr = this.startId != null ? String(this.startId) : null
+                const eidStr = this.endId != null ? String(this.endId) : null
+                for (const s of this.validStations) {
+                    const isTransfer = s.isTransfer === 1
+                    const sId = String(s.id)
+                    const isStart = sId === sidStr
+                    const isEnd = sId === eidStr
+                    let iconPath = isTransfer ? '/static/marker-transfer.png' : '/static/marker-normal.png'
+                    let w = isTransfer ? 26 : 16
+                    let h = isTransfer ? 26 : 16
+                    if (isStart) {
+                        iconPath = '/static/marker-start.png'
+                        w = 30; h = 30
+                    } else if (isEnd) {
+                        iconPath = '/static/marker-end.png'
+                        w = 30; h = 30
+                    }
+                    markers.push({
+                        id: Number(s.id) || Math.floor(Math.random() * 100000),
+                        latitude: s._lat,
+                        longitude: s._lng,
+                        width: w,
+                        height: h,
+                        iconPath,
+                        callout: {
+                            content: s.stationName,
+                            display: 'BYCLICK',
+                            padding: 10,
+                            borderRadius: 8,
+                            fontSize: 14,
+                            bgColor: '#ffffff',
+                            color: '#1a1a2e',
+                            borderWidth: 1,
+                            borderColor: '#e4e7ed',
+                            textAlign: 'center'
+                        }
+                    })
+                }
+                return markers
+            }
+        },
+        watch: {
+            validStations: {
+                handler(stations) {
+                    if (stations.length > 0) this.updateCenter(stations)
+                    this.scheduleDraw()
+                },
+                immediate: true
+            },
+            mapMode() { this.scheduleDraw() },
+            startId() { this.scheduleDraw() },
+            endId() { this.scheduleDraw() },
+            routePath() { this.scheduleDraw() },
+            highlightLineId() { this.scheduleDraw() },
+            width() { this.scheduleDraw() },
+            height() { this.scheduleDraw() }
+        },
+        mounted() {
+            this.scheduleDraw()
+        },
+        beforeDestroy() {
+            if (this._drawTimer) clearTimeout(this._drawTimer)
+        },
+        methods: {
+            scheduleDraw() {
+                if (this._drawTimer) clearTimeout(this._drawTimer)
+                this._drawTimer = setTimeout(() => {
+                    if (this.mapMode === 'schematic') this.drawSchematic()
+                }, 80)
+            },
+            calcProjection() {
+                const stations = this.validStations
+                if (stations.length === 0) return null
+                let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
+                for (const s of stations) {
+                    if (s._lat < minLat) minLat = s._lat
+                    if (s._lat > maxLat) maxLat = s._lat
+                    if (s._lng < minLng) minLng = s._lng
+                    if (s._lng > maxLng) maxLng = s._lng
+                }
+                const padding = 24
+                const usableW = Math.max(1, this.width - 2 * padding)
+                const usableH = Math.max(1, this.height - 2 * padding)
+                const lngRange = (maxLng - minLng) || 0.01
+                const latRange = (maxLat - minLat) || 0.01
+                const scaleX = usableW / lngRange
+                const scaleY = usableH / latRange
+                const scale = Math.min(scaleX, scaleY)
+                const offsetX = padding + (usableW - scale * lngRange) / 2
+                const offsetY = padding + (usableH - scale * latRange) / 2
+                return { minLat, maxLat, minLng, maxLng, scale, offsetX, offsetY }
+            },
+            project(lat, lng, proj) {
+                const x = proj.offsetX + (lng - proj.minLng) * proj.scale
+                const y = proj.offsetY + (proj.maxLat - lat) * proj.scale
+                return { x, y }
+            },
+            drawSchematic() {
+                let ctx
+                try {
+                    ctx = uni.createCanvasContext('metroCanvas', this)
+                } catch (e) {
+                    return
+                }
+                if (!ctx) return
+                const proj = this.calcProjection()
+                this.projection = proj
+
+                // 纯白底
+                ctx.setFillStyle('#ffffff')
+                ctx.fillRect(0, 0, this.width, this.height)
+
+                if (!proj) {
+                    ctx.draw()
+                    return
+                }
+
+                // 1) 画所有线路（彩色折线）
+                const linesArr = Array.isArray(this.lines) ? this.lines : []
+                for (const line of linesArr) {
+                    const raw = this.orderedStationMap[line.id]
+                    const stations = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.stations) ? raw.stations : [])
+                    const points = stations.filter(s => s.latitude != null && s.longitude != null)
+                    if (points.length < 2) continue
+
+                    const color = line.lineColor || '#1a73e8'
+                    const dimmed = this.highlightLineId && this.highlightLineId !== line.id
+
+                    ctx.beginPath()
+                    ctx.setStrokeStyle(dimmed ? '#d8dde5' : color)
+                    ctx.setLineWidth(dimmed ? 2 : 4)
+                    ctx.setLineCap('round')
+                    ctx.setLineJoin('round')
+                    for (let i = 0; i < points.length; i++) {
+                        const p = this.project(Number(points[i].latitude), Number(points[i].longitude), proj)
+                        if (i === 0) ctx.moveTo(p.x, p.y)
+                        else ctx.lineTo(p.x, p.y)
+                    }
+                    ctx.stroke()
+                }
+
+                // 2) 画规划路线（橙色加粗高亮）
+                if (this.routePath && this.routePath.length >= 2) {
+                    const stationMap = {}
+                    for (const s of this.validStations) stationMap[String(s.id)] = s
+                    const routePoints = []
+                    for (const sid of this.routePath) {
+                        const s = stationMap[String(sid)]
+                        if (s) routePoints.push(s)
+                    }
+                    if (routePoints.length >= 2) {
+                        ctx.beginPath()
+                        ctx.setStrokeStyle('#ff6b35')
+                        ctx.setLineWidth(6)
+                        ctx.setLineCap('round')
+                        ctx.setLineJoin('round')
+                        for (let i = 0; i < routePoints.length; i++) {
+                            const p = this.project(routePoints[i]._lat, routePoints[i]._lng, proj)
+                            if (i === 0) ctx.moveTo(p.x, p.y)
+                            else ctx.lineTo(p.x, p.y)
+                        }
+                        ctx.stroke()
+                    }
+                }
+
+                // 3) 画站点
+                const sidStr = this.startId != null ? String(this.startId) : null
+                const eidStr = this.endId != null ? String(this.endId) : null
+                for (const s of this.validStations) {
+                    const p = this.project(s._lat, s._lng, proj)
+                    const isStart = String(s.id) === sidStr
+                    const isEnd = String(s.id) === eidStr
+                    const isTransfer = s.isTransfer === 1
+
+                    if (isStart || isEnd) {
+                        ctx.setFillStyle(isStart ? '#34a853' : '#ea4335')
+                        ctx.beginPath()
+                        ctx.arc(p.x, p.y, 9, 0, Math.PI * 2)
+                        ctx.fill()
+                        ctx.setFillStyle('#fff')
+                        ctx.beginPath()
+                        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2)
+                        ctx.fill()
+                    } else if (isTransfer) {
+                        ctx.setFillStyle('#ffffff')
+                        ctx.beginPath()
+                        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2)
+                        ctx.fill()
+                        ctx.setStrokeStyle('#1a1a2e')
+                        ctx.setLineWidth(2)
+                        ctx.beginPath()
+                        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2)
+                        ctx.stroke()
+                    } else {
+                        ctx.setFillStyle(s._lineColor || '#1a73e8')
+                        ctx.beginPath()
+                        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2)
+                        ctx.fill()
+                    }
+                }
+
+                // 4) 起终点站名标签（白底黑字气泡）
+                for (const s of this.validStations) {
+                    const isStart = String(s.id) === sidStr
+                    const isEnd = String(s.id) === eidStr
+                    if (!isStart && !isEnd) continue
+                    const p = this.project(s._lat, s._lng, proj)
+                    const label = s.stationName || ''
+                    if (!label) continue
+                    ctx.setFontSize(11)
+                    const textW = label.length * 11 + 10
+                    const lx = p.x - textW / 2
+                    const ly = p.y + 14
+                    ctx.setFillStyle('#ffffff')
+                    ctx.fillRect(lx, ly, textW, 18)
+                    ctx.setStrokeStyle(isStart ? '#34a853' : '#ea4335')
+                    ctx.setLineWidth(1)
+                    ctx.strokeRect(lx, ly, textW, 18)
+                    ctx.setFillStyle('#1a1a2e')
+                    ctx.setTextAlign('center')
+                    ctx.setTextBaseline('middle')
+                    ctx.fillText(label, p.x, ly + 9)
+                }
+
+                ctx.draw()
+            },
+            onCanvasTouch(e) {
+                if (!this.projection) return
+                const touch = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0])
+                if (!touch) return
+                const x = touch.x
+                const y = touch.y
+                let nearest = null
+                let minDist = 30
+                for (const s of this.validStations) {
+                    const p = this.project(s._lat, s._lng, this.projection)
+                    const dist = Math.sqrt((x - p.x) * (x - p.x) + (y - p.y) * (y - p.y))
+                    if (dist < minDist) {
+                        minDist = dist
+                        nearest = s
+                    }
+                }
+                if (nearest) this.selectedStation = nearest
+                else this.selectedStation = null
+            },
+            updateCenter(stations) {
+                let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
+                for (const s of stations) {
+                    if (s._lat < minLat) minLat = s._lat
+                    if (s._lat > maxLat) maxLat = s._lat
+                    if (s._lng < minLng) minLng = s._lng
+                    if (s._lng > maxLng) maxLng = s._lng
+                }
+                this.centerLat = (minLat + maxLat) / 2
+                this.centerLng = (minLng + maxLng) / 2
+                const span = Math.max(maxLat - minLat, maxLng - minLng)
+                if (span > 2) this.mapScale = 9
+                else if (span > 1) this.mapScale = 10
+                else if (span > 0.5) this.mapScale = 11
+                else if (span > 0.2) this.mapScale = 12
+                else if (span > 0.08) this.mapScale = 13
+                else this.mapScale = 14
+            },
+            onMarkerTap(e) {
+                const markerId = e.detail.markerId
+                const station = this.validStations.find(s => Number(s.id) === markerId)
+                if (station) this.selectedStation = station
+            },
+            onCalloutTap(e) {
+                const markerId = e.detail.markerId
+                const station = this.validStations.find(s => Number(s.id) === markerId)
+                if (station) this.selectedStation = station
+            },
+            selectAsStart() {
+                if (this.selectedStation) {
+                    this.$emit('set-start', this.selectedStation)
+                    this.selectedStation = null
+                }
+            },
+            selectAsEnd() {
+                if (this.selectedStation) {
+                    this.$emit('set-end', this.selectedStation)
+                    this.selectedStation = null
+                }
+            },
+            closeStationCard() {
+                this.selectedStation = null
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.map-wrap {
+    position: relative;
+    overflow: hidden;
+    background: #ffffff;
+}
+.metro-canvas {
+    background: #ffffff;
+    display: block;
+}
+.metro-map {
+    display: block;
+}
+
+/* 站点操作卡片 */
+.station-action-card {
+    position: absolute; bottom: 16rpx; left: 16rpx; right: 16rpx;
+    background: #fff; border-radius: 16rpx;
+    box-shadow: 0 8rpx 32rpx rgba(0,0,0,0.15);
+    overflow: hidden; z-index: 10;
+    border: 1rpx solid #ebeef5;
+}
+.sac-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16rpx 20rpx; border-bottom: 1rpx solid #f0f0f0;
+}
+.sac-name-row { display: flex; align-items: center; gap: 12rpx; }
+.sac-name { font-size: 28rpx; font-weight: 700; color: #1a1a2e; }
+.sac-line { font-size: 20rpx; color: #909399; background: #f5f7fa; padding: 4rpx 12rpx; border-radius: 6rpx; }
+.sac-close { padding: 8rpx; }
+.sac-close-icon { font-size: 26rpx; color: #909399; }
+
+.sac-actions {
+    display: flex; gap: 12rpx; padding: 14rpx 20rpx;
+}
+.sac-btn {
+    flex: 1; padding: 16rpx 0; border-radius: 12rpx;
+    text-align: center;
+}
+.sac-btn.start { background: linear-gradient(135deg, #34a853, #2d8f47); }
+.sac-btn.end { background: linear-gradient(135deg, #ea4335, #d93025); }
+.sac-btn-text { font-size: 24rpx; font-weight: 600; color: #fff; }
+</style>

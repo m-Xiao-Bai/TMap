@@ -1,0 +1,294 @@
+<template>
+    <view class="login-page">
+        <!-- Logo + 品牌 -->
+        <view class="brand-section">
+            <view class="brand-logo">
+                <text class="brand-emoji">🚇</text>
+            </view>
+            <text class="brand-title">城市轨道交通</text>
+            <text class="brand-sub">智慧出行 · 一键购票</text>
+        </view>
+
+        <!-- 表单 -->
+        <view class="form-section">
+            <view class="form-row">
+                <text class="form-icon">@</text>
+                <input class="form-input" :value="account" @input="account=$event.detail.value" placeholder="手机号或邮箱" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row">
+                <text class="form-icon">🔒</text>
+                <input class="form-input" :password="true" :value="password" @input="password=$event.detail.value" placeholder="请输入密码" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row form-captcha-row">
+                <text class="form-icon">⛨</text>
+                <input class="form-input" :value="captchaCode" @input="captchaCode=$event.detail.value" placeholder="验证码" placeholder-style="color:#c0c4cc" />
+                <image class="form-captcha-img" :src="captchaImage" @tap="refreshCaptcha" mode="aspectFit"></image>
+            </view>
+
+            <view class="login-btn" :class="{ disabled: loginLoading }" @tap="handleLogin">
+                <text class="login-btn-text">{{ loginLoading ? '登录中...' : '登 录' }}</text>
+            </view>
+        </view>
+
+        <!-- 微信登录 -->
+        <view class="other-section">
+            <view class="divider">
+                <view class="divider-line"></view>
+                <text class="divider-text">其他登录方式</text>
+                <view class="divider-line"></view>
+            </view>
+            <view class="wechat-btn" @tap="handleWechatLogin">
+                <text class="wechat-icon">💬</text>
+                <text class="wechat-text">微信一键登录</text>
+            </view>
+        </view>
+
+        <!-- 注册 -->
+        <view class="register-section" @tap="goRegister">
+            <text class="register-text">还没有账号？</text>
+            <text class="register-link">立即注册</text>
+        </view>
+
+        <!-- 协议 -->
+        <view class="agreement">
+            <text class="agreement-text">登录即表示同意</text>
+            <text class="agreement-link">《用户协议》</text>
+            <text class="agreement-text">和</text>
+            <text class="agreement-link">《隐私政策》</text>
+        </view>
+    </view>
+</template>
+
+<script>
+    import { userLogin, wechatLogin, getCaptchaImage } from '@/api/user'
+    import { useUserStore } from '@/store/user'
+
+    const userStore = useUserStore()
+
+    export default {
+        data() {
+            return {
+                account: '', password: '',
+                captchaKey: '', captchaCode: '', captchaImage: '',
+                loginLoading: false, wechatLoading: false
+            }
+        },
+        onLoad() {
+            this.refreshCaptcha()
+        },
+        methods: {
+            async refreshCaptcha() {
+                try {
+                    const res = await getCaptchaImage()
+                    if (res.code === 200) {
+                        this.captchaImage = res.data.captchaImage
+                        this.captchaKey = res.data.captchaKey
+                    }
+                } catch {}
+            },
+            async handleLogin() {
+                if (!this.account || !this.password) {
+                    return uni.showToast({ title: '请输入账号和密码', icon: 'none' })
+                }
+                if (!this.captchaCode) {
+                    return uni.showToast({ title: '请输入验证码', icon: 'none' })
+                }
+                this.loginLoading = true
+                try {
+                    const isEmail = this.account.includes('@')
+                    const res = await userLogin({
+                        account: this.account, password: this.password,
+                        type: isEmail ? 'email' : 'mobile',
+                        captchaKey: this.captchaKey, captchaCode: this.captchaCode
+                    })
+                    if (res.code === 200) {
+                        userStore.setUser(res.data)
+                        uni.showToast({ title: '登录成功', icon: 'success' })
+                        setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+                    }
+                } catch { this.refreshCaptcha() } finally { this.loginLoading = false }
+            },
+            async handleWechatLogin() {
+                this.wechatLoading = true
+                try {
+                    const loginRes = await new Promise((resolve, reject) => {
+                        uni.login({ provider: 'weixin', success: resolve, fail: reject })
+                    })
+                    const res = await wechatLogin(loginRes.code)
+                    if (res.code === 200) {
+                        userStore.setUser(res.data)
+                        uni.showToast({ title: '登录成功', icon: 'success' })
+                        setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
+                    }
+                } catch { uni.showToast({ title: '微信登录失败', icon: 'none' }) }
+                finally { this.wechatLoading = false }
+            },
+            goRegister() { uni.navigateTo({ url: '/pages/register/register' }) }
+        }
+    }
+</script>
+
+<style scoped>
+.login-page {
+    min-height: 100vh;
+    background: #fff;
+    padding: 0 40rpx 40rpx;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 品牌 */
+.brand-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 100rpx;
+    margin-bottom: 60rpx;
+    gap: 16rpx;
+}
+.brand-logo {
+    width: 140rpx;
+    height: 140rpx;
+    background: linear-gradient(135deg, #1a73e8, #1565c0);
+    border-radius: 36rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12rpx 32rpx rgba(26, 115, 232, 0.3);
+    margin-bottom: 8rpx;
+}
+.brand-emoji { font-size: 70rpx; }
+.brand-title {
+    font-size: 36rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+    letter-spacing: 2rpx;
+}
+.brand-sub {
+    font-size: 22rpx;
+    color: #909399;
+    letter-spacing: 1rpx;
+}
+
+/* 表单 */
+.form-section {
+    margin-bottom: 32rpx;
+}
+.form-row {
+    display: flex;
+    align-items: center;
+    background: #fafbfc;
+    border: 1rpx solid #ebeef5;
+    border-radius: 14rpx;
+    padding: 0 18rpx;
+    margin-bottom: 16rpx;
+    gap: 14rpx;
+}
+.form-icon {
+    font-size: 30rpx;
+    color: #909399;
+    flex-shrink: 0;
+}
+.form-input {
+    flex: 1;
+    height: 88rpx;
+    font-size: 28rpx;
+    color: #303133;
+    background: transparent;
+}
+.form-captcha-row {
+    padding-right: 8rpx;
+}
+.form-captcha-img {
+    width: 200rpx;
+    height: 64rpx;
+    border-radius: 8rpx;
+    flex-shrink: 0;
+    border: 1rpx solid #ebeef5;
+}
+
+.login-btn {
+    margin-top: 24rpx;
+    height: 96rpx;
+    background: #1a73e8;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8rpx 20rpx rgba(26, 115, 232, 0.3);
+}
+.login-btn.disabled {
+    background: #c0c4cc;
+    box-shadow: none;
+}
+.login-btn-text {
+    font-size: 32rpx;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 8rpx;
+}
+
+/* 其他登录 */
+.other-section {
+    margin-bottom: 28rpx;
+}
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 18rpx;
+    margin-bottom: 24rpx;
+}
+.divider-line {
+    flex: 1;
+    height: 1rpx;
+    background: #ebeef5;
+}
+.divider-text {
+    font-size: 22rpx;
+    color: #909399;
+}
+.wechat-btn {
+    height: 88rpx;
+    background: #fff;
+    border: 1rpx solid #07c160;
+    border-radius: 14rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12rpx;
+}
+.wechat-icon { font-size: 32rpx; }
+.wechat-text {
+    font-size: 28rpx;
+    color: #07c160;
+    font-weight: 700;
+}
+
+/* 注册 */
+.register-section {
+    display: flex;
+    justify-content: center;
+    gap: 8rpx;
+    padding: 16rpx 0;
+}
+.register-text {
+    font-size: 26rpx;
+    color: #909399;
+}
+.register-link {
+    font-size: 26rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+
+/* 协议 */
+.agreement {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: auto;
+    padding: 30rpx 20rpx 10rpx;
+}
+.agreement-text { font-size: 20rpx; color: #c0c4cc; }
+.agreement-link { font-size: 20rpx; color: #1a73e8; }
+</style>

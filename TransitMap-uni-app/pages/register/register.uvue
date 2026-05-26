@@ -1,0 +1,276 @@
+<template>
+    <view class="register-page">
+        <!-- 标题区 -->
+        <view class="header-section">
+            <view class="header-icon">
+                <text class="header-emoji">✨</text>
+            </view>
+            <text class="header-title">创建账号</text>
+            <text class="header-sub">开启智慧出行新体验</text>
+        </view>
+
+        <!-- 表单 -->
+        <view class="form-section">
+            <view class="form-row">
+                <text class="form-icon">👤</text>
+                <input class="form-input" :value="form.username" @input="form.username=$event.detail.value" placeholder="请输入用户名 (2-20 字符)" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row">
+                <text class="form-icon">@</text>
+                <input class="form-input" :value="form.email" @input="form.email=$event.detail.value" placeholder="请输入 QQ 邮箱" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row form-code-row">
+                <text class="form-icon">⛨</text>
+                <input class="form-input" :value="form.emailCode" @input="form.emailCode=$event.detail.value" placeholder="邮箱验证码" placeholder-style="color:#c0c4cc" />
+                <view class="code-btn" :class="{ disabled: countdown > 0 || sending }" @tap="sendCode">
+                    <text class="code-btn-text">{{ countdown > 0 ? countdown + 's' : '获取验证码' }}</text>
+                </view>
+            </view>
+            <view class="form-row">
+                <text class="form-icon">🔒</text>
+                <input class="form-input" :password="true" :value="form.pwd" @input="form.pwd=$event.detail.value" placeholder="密码 (6-20 位)" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row">
+                <text class="form-icon">🔐</text>
+                <input class="form-input" :password="true" :value="form.confirmPwd" @input="form.confirmPwd=$event.detail.value" placeholder="再次输入密码" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row">
+                <text class="form-icon">📱</text>
+                <input class="form-input" type="number" :value="form.mobile" @input="form.mobile=$event.detail.value" placeholder="手机号 (选填)" placeholder-style="color:#c0c4cc" />
+            </view>
+            <view class="form-row">
+                <text class="form-label-static">性别</text>
+                <view class="gender-pills">
+                    <view class="gender-pill" :class="{ active: form.gender === 'M' }" @tap="form.gender = 'M'">
+                        <text class="gender-text">男</text>
+                    </view>
+                    <view class="gender-pill" :class="{ active: form.gender === 'F' }" @tap="form.gender = 'F'">
+                        <text class="gender-text">女</text>
+                    </view>
+                    <view class="gender-pill" :class="{ active: !form.gender || form.gender === 'U' }" @tap="form.gender = 'U'">
+                        <text class="gender-text">保密</text>
+                    </view>
+                </view>
+            </view>
+
+            <view class="register-btn" :class="{ disabled: loading }" @tap="handleRegister">
+                <text class="register-btn-text">{{ loading ? '注册中...' : '注 册' }}</text>
+            </view>
+        </view>
+
+        <view class="login-link" @tap="goLogin">
+            <text class="link-text">已有账号？</text>
+            <text class="link-highlight">立即登录</text>
+        </view>
+    </view>
+</template>
+
+<script>
+    import { userRegister, sendEmailCode } from '@/api/user'
+
+    export default {
+        data() {
+            return {
+                form: { username: '', email: '', emailCode: '', pwd: '', confirmPwd: '', mobile: '', gender: 'U' },
+                loading: false, sending: false,
+                countdown: 0, timer: null
+            }
+        },
+        onUnload() { if (this.timer) clearInterval(this.timer) },
+        methods: {
+            async sendCode() {
+                if (this.countdown > 0 || this.sending) return
+                if (!this.form.email) return uni.showToast({ title: '请输入邮箱', icon: 'none' })
+                if (!/^\d+@qq\.com$/i.test(this.form.email)) return uni.showToast({ title: '请使用 QQ 邮箱', icon: 'none' })
+                this.sending = true
+                try {
+                    const res = await sendEmailCode(this.form.email)
+                    if (res.code === 200) {
+                        uni.showToast({ title: '验证码已发送', icon: 'success' })
+                        this.countdown = 60
+                        this.timer = setInterval(() => {
+                            this.countdown--
+                            if (this.countdown <= 0) clearInterval(this.timer)
+                        }, 1000)
+                    }
+                } catch {} finally { this.sending = false }
+            },
+            async handleRegister() {
+                if (!this.form.username || this.form.username.length < 2) return uni.showToast({ title: '用户名至少 2 字符', icon: 'none' })
+                if (!this.form.email) return uni.showToast({ title: '请输入邮箱', icon: 'none' })
+                if (!this.form.emailCode) return uni.showToast({ title: '请输入邮箱验证码', icon: 'none' })
+                if (!this.form.pwd || this.form.pwd.length < 6) return uni.showToast({ title: '密码至少 6 位', icon: 'none' })
+                if (this.form.pwd !== this.form.confirmPwd) return uni.showToast({ title: '两次密码不一致', icon: 'none' })
+                this.loading = true
+                try {
+                    const res = await userRegister({
+                        username: this.form.username,
+                        email: this.form.email,
+                        emailCode: this.form.emailCode,
+                        password: this.form.pwd,
+                        mobile: this.form.mobile,
+                        gender: this.form.gender
+                    })
+                    if (res.code === 200) {
+                        uni.showToast({ title: '注册成功', icon: 'success' })
+                        setTimeout(() => uni.navigateBack(), 1000)
+                    }
+                } catch {} finally { this.loading = false }
+            },
+            goLogin() { uni.navigateBack() }
+        }
+    }
+</script>
+
+<style scoped>
+.register-page {
+    min-height: 100vh;
+    background: #fff;
+    padding: 0 40rpx 40rpx;
+    display: flex;
+    flex-direction: column;
+}
+
+.header-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 60rpx;
+    margin-bottom: 36rpx;
+    gap: 12rpx;
+}
+.header-icon {
+    width: 100rpx;
+    height: 100rpx;
+    background: linear-gradient(135deg, #1a73e8, #1565c0);
+    border-radius: 28rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8rpx 20rpx rgba(26, 115, 232, 0.3);
+    margin-bottom: 8rpx;
+}
+.header-emoji { font-size: 48rpx; }
+.header-title {
+    font-size: 36rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+}
+.header-sub {
+    font-size: 22rpx;
+    color: #909399;
+}
+
+.form-section { margin-bottom: 24rpx; }
+.form-row {
+    display: flex;
+    align-items: center;
+    background: #fafbfc;
+    border: 1rpx solid #ebeef5;
+    border-radius: 14rpx;
+    padding: 0 18rpx;
+    margin-bottom: 16rpx;
+    gap: 14rpx;
+}
+.form-icon {
+    font-size: 28rpx;
+    color: #909399;
+    flex-shrink: 0;
+}
+.form-label-static {
+    font-size: 26rpx;
+    color: #606266;
+    font-weight: 500;
+    flex-shrink: 0;
+    padding-left: 8rpx;
+}
+.form-input {
+    flex: 1;
+    height: 88rpx;
+    font-size: 28rpx;
+    color: #303133;
+    background: transparent;
+}
+
+.form-code-row { padding-right: 8rpx; }
+.code-btn {
+    flex-shrink: 0;
+    padding: 12rpx 22rpx;
+    background: #e8f0fe;
+    border-radius: 10rpx;
+}
+.code-btn.disabled {
+    background: #f5f7fa;
+}
+.code-btn-text {
+    font-size: 22rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+.code-btn.disabled .code-btn-text { color: #c0c4cc; }
+
+/* 性别 */
+.gender-pills {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8rpx;
+    padding: 14rpx 0;
+}
+.gender-pill {
+    padding: 8rpx 20rpx;
+    background: #fff;
+    border: 1rpx solid #ebeef5;
+    border-radius: 20rpx;
+}
+.gender-pill.active {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+}
+.gender-text {
+    font-size: 24rpx;
+    color: #606266;
+    font-weight: 600;
+}
+.gender-pill.active .gender-text {
+    color: #1a73e8;
+    font-weight: 700;
+}
+
+.register-btn {
+    margin-top: 12rpx;
+    height: 96rpx;
+    background: #1a73e8;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8rpx 20rpx rgba(26, 115, 232, 0.3);
+}
+.register-btn.disabled {
+    background: #c0c4cc;
+    box-shadow: none;
+}
+.register-btn-text {
+    font-size: 32rpx;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 8rpx;
+}
+
+.login-link {
+    display: flex;
+    justify-content: center;
+    gap: 8rpx;
+    padding: 16rpx 0 28rpx;
+}
+.link-text {
+    font-size: 26rpx;
+    color: #909399;
+}
+.link-highlight {
+    font-size: 26rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+</style>

@@ -1,0 +1,489 @@
+<template>
+    <view class="refund-page">
+        <view class="loading-wrap" v-if="loading">
+            <text class="loading-text">加载中...</text>
+        </view>
+
+        <view v-else-if="order">
+            <!-- 订单摘要 -->
+            <view class="order-summary">
+                <view class="os-header">
+                    <text class="os-title">退票订单</text>
+                    <text class="os-no">{{ order.orderNo }}</text>
+                </view>
+                <view class="os-route">
+                    <view class="os-route-side">
+                        <view class="os-route-marker os-route-start"></view>
+                        <text class="os-route-name">{{ order.startStationName }}</text>
+                    </view>
+                    <view class="os-route-arrow">
+                        <view class="os-route-line"></view>
+                        <text class="os-route-stops">{{ order.stationCount }} 站</text>
+                        <view class="os-route-line"></view>
+                    </view>
+                    <view class="os-route-side os-route-side-end">
+                        <view class="os-route-marker os-route-end"></view>
+                        <text class="os-route-name">{{ order.endStationName }}</text>
+                    </view>
+                </view>
+                <view class="os-meta">
+                    <view class="os-meta-item">
+                        <text class="os-meta-label">购票时间</text>
+                        <text class="os-meta-value">{{ formatTime(order.payTime || order.createTime) }}</text>
+                    </view>
+                    <view class="os-meta-item">
+                        <text class="os-meta-label">退款金额</text>
+                        <text class="os-meta-value os-meta-price">¥{{ order.price }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 选择原因 -->
+            <view class="reason-section">
+                <view class="rs-header">
+                    <text class="rs-title">退票原因</text>
+                    <text class="rs-required">*</text>
+                </view>
+                <view class="rs-options">
+                    <view class="rs-option" v-for="r in reasons" :key="r"
+                          :class="{ active: selectedReason === r }"
+                          @tap="selectedReason = r">
+                        <text class="rs-option-text">{{ r }}</text>
+                        <view class="rs-option-check" v-if="selectedReason === r">
+                            <text class="rs-option-check-text">✓</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 自定义补充 -->
+            <view class="custom-section">
+                <view class="cs-header">
+                    <text class="cs-title">补充说明</text>
+                    <text class="cs-optional">（选填）</text>
+                </view>
+                <textarea class="cs-input"
+                          v-model="customNote"
+                          placeholder="如有需要，请详细描述..."
+                          placeholder-style="color:#c0c4cc"
+                          maxlength="200"
+                          :show-confirm-bar="false"></textarea>
+                <text class="cs-counter">{{ customNote.length }}/200</text>
+            </view>
+
+            <!-- 退票说明 -->
+            <view class="notice-section">
+                <view class="ns-icon">!</view>
+                <view class="ns-content">
+                    <text class="ns-title">退票须知</text>
+                    <text class="ns-item">· 提交退票申请后，订单状态变为"退票审核中"</text>
+                    <text class="ns-item">· 管理员将在 1-3 个工作日内审核</text>
+                    <text class="ns-item">· 审核通过后，款项原路退回，期间二维码失效</text>
+                    <text class="ns-item">· 审核未通过则订单恢复到已支付状态</text>
+                </view>
+            </view>
+
+            <view class="bottom-spacer"></view>
+
+            <!-- 底部提交栏 -->
+            <view class="action-bar safe-bottom">
+                <view class="ab-cancel" @tap="goBack">
+                    <text class="ab-cancel-text">取消</text>
+                </view>
+                <view class="ab-submit" :class="{ disabled: !selectedReason }" @tap="handleSubmit">
+                    <text class="ab-submit-text">提交退票申请</text>
+                </view>
+            </view>
+        </view>
+
+        <view v-else>
+            <empty-state title="订单不存在" actionText="返回" @action="goBack" />
+        </view>
+    </view>
+</template>
+
+<script>
+    import { getMyTicketOrders, refundTicketOrder } from '@/api/ticket'
+    import { formatTime } from '@/utils/format'
+    import EmptyState from '@/components/empty-state.uvue'
+
+    export default {
+        components: { EmptyState },
+        data() {
+            return {
+                orderId: null,
+                order: null,
+                loading: true,
+                selectedReason: '',
+                customNote: '',
+                reasons: [
+                    '行程取消，不出行了',
+                    '买错站了',
+                    '时间安排有变',
+                    '重复购买',
+                    '其他原因'
+                ],
+                submitting: false
+            }
+        },
+        onLoad(options) {
+            if (options && options.id) {
+                this.orderId = options.id
+                this.loadOrder()
+            } else {
+                this.loading = false
+            }
+        },
+        methods: {
+            formatTime,
+            goBack() { uni.navigateBack() },
+            async loadOrder() {
+                this.loading = true
+                try {
+                    const res = await getMyTicketOrders()
+                    if (res.code === 200) {
+                        const list = res.data || []
+                        this.order = list.find(o => String(o.id) === String(this.orderId))
+                    }
+                } catch {} finally { this.loading = false }
+            },
+            handleSubmit() {
+                if (!this.selectedReason) {
+                    uni.showToast({ title: '请选择退票原因', icon: 'none' })
+                    return
+                }
+                if (this.submitting) return
+                const reason = this.customNote
+                    ? `${this.selectedReason}（${this.customNote}）`
+                    : this.selectedReason
+                uni.showModal({
+                    title: '确认退票申请',
+                    content: '提交后订单将进入退票审核流程，确定要提交吗？',
+                    success: async r => {
+                        if (!r.confirm) return
+                        this.submitting = true
+                        try {
+                            const res = await refundTicketOrder({
+                                orderId: this.order.id,
+                                reason
+                            })
+                            if (res.code === 200) {
+                                uni.showToast({ title: '已提交退票申请', icon: 'success' })
+                                setTimeout(() => uni.navigateBack(), 1000)
+                            }
+                        } catch {} finally { this.submitting = false }
+                    }
+                })
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.refund-page {
+    min-height: 100vh;
+    background: #f7f8fa;
+    padding-bottom: 140rpx;
+}
+
+.loading-wrap {
+    padding: 100rpx 0;
+    text-align: center;
+}
+.loading-text {
+    font-size: 26rpx;
+    color: #c0c4cc;
+}
+
+/* 订单摘要 */
+.order-summary {
+    margin: 24rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 22rpx 24rpx;
+}
+.os-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18rpx;
+    padding-bottom: 14rpx;
+    border-bottom: 1rpx dashed #f0f2f5;
+}
+.os-title { font-size: 26rpx; color: #303133; font-weight: 700; }
+.os-no { font-size: 22rpx; color: #909399; }
+
+.os-route {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    margin-bottom: 16rpx;
+}
+.os-route-side {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+}
+.os-route-side-end {
+    justify-content: flex-end;
+}
+.os-route-marker {
+    width: 14rpx;
+    height: 14rpx;
+    border-radius: 50%;
+    border: 4rpx solid;
+    background: #fff;
+    flex-shrink: 0;
+}
+.os-route-start { border-color: #34a853; }
+.os-route-end { border-color: #ea4335; }
+.os-route-name {
+    font-size: 28rpx;
+    color: #1a1a2e;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.os-route-arrow {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    flex-shrink: 0;
+}
+.os-route-line {
+    width: 16rpx;
+    height: 2rpx;
+    background: #d0d7de;
+}
+.os-route-stops {
+    font-size: 20rpx;
+    color: #1a73e8;
+    font-weight: 700;
+    background: #e8f0fe;
+    padding: 4rpx 10rpx;
+    border-radius: 8rpx;
+}
+
+.os-meta {
+    display: flex;
+    justify-content: space-between;
+}
+.os-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+}
+.os-meta-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.os-meta-value {
+    font-size: 24rpx;
+    color: #303133;
+    font-weight: 600;
+}
+.os-meta-price {
+    font-size: 30rpx;
+    color: #1a73e8;
+    font-weight: 800;
+}
+
+/* 选择原因 */
+.reason-section {
+    margin: 16rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 22rpx 24rpx;
+}
+.rs-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16rpx;
+}
+.rs-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.rs-required {
+    color: #f43f5e;
+    font-size: 26rpx;
+    margin-left: 4rpx;
+}
+
+.rs-options {
+    display: flex;
+    flex-direction: column;
+}
+.rs-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 22rpx 16rpx;
+    border-bottom: 1rpx solid #f5f7fa;
+    border-radius: 12rpx;
+}
+.rs-option:last-child { border-bottom: none; }
+.rs-option.active {
+    background: #f5f8ff;
+    border-color: transparent;
+}
+.rs-option-text {
+    font-size: 28rpx;
+    color: #303133;
+    font-weight: 500;
+}
+.rs-option.active .rs-option-text {
+    color: #1a73e8;
+    font-weight: 700;
+}
+.rs-option-check {
+    width: 36rpx;
+    height: 36rpx;
+    border-radius: 50%;
+    background: #1a73e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.rs-option-check-text {
+    font-size: 22rpx;
+    color: #fff;
+    font-weight: 800;
+}
+
+/* 自定义 */
+.custom-section {
+    margin: 16rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    padding: 22rpx 24rpx;
+}
+.cs-header {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 16rpx;
+}
+.cs-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.cs-optional {
+    font-size: 22rpx;
+    color: #909399;
+    margin-left: 4rpx;
+}
+.cs-input {
+    width: 100%;
+    min-height: 160rpx;
+    padding: 16rpx;
+    background: #fafbfc;
+    border: 1rpx solid #ebeef5;
+    border-radius: 12rpx;
+    font-size: 26rpx;
+    color: #303133;
+    box-sizing: border-box;
+}
+.cs-counter {
+    font-size: 20rpx;
+    color: #c0c4cc;
+    text-align: right;
+    display: block;
+    margin-top: 8rpx;
+}
+
+/* 退票须知 */
+.notice-section {
+    margin: 16rpx 24rpx 0;
+    background: #fffbeb;
+    border-radius: 16rpx;
+    border: 1rpx solid #fef3c7;
+    padding: 18rpx 22rpx;
+    display: flex;
+    gap: 14rpx;
+}
+.ns-icon {
+    width: 36rpx;
+    height: 36rpx;
+    background: #f59e0b;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24rpx;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+.ns-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+}
+.ns-title {
+    font-size: 24rpx;
+    color: #92400e;
+    font-weight: 700;
+    margin-bottom: 4rpx;
+}
+.ns-item {
+    font-size: 22rpx;
+    color: #b45309;
+    line-height: 1.6;
+}
+
+.bottom-spacer { height: 40rpx; }
+
+/* 底部 */
+.action-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-top: 1rpx solid #ebeef5;
+    padding: 16rpx 24rpx;
+    display: flex;
+    gap: 12rpx;
+    z-index: 100;
+}
+.ab-cancel {
+    flex: 1;
+    height: 88rpx;
+    background: #fff;
+    border: 1rpx solid #ebeef5;
+    border-radius: 14rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ab-cancel-text {
+    font-size: 30rpx;
+    color: #606266;
+    font-weight: 600;
+}
+.ab-submit {
+    flex: 2;
+    height: 88rpx;
+    background: #1a73e8;
+    border-radius: 14rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ab-submit.disabled {
+    background: #c0c4cc;
+}
+.ab-submit-text {
+    font-size: 30rpx;
+    color: #fff;
+    font-weight: 700;
+}
+</style>

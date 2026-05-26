@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mu.transitmap.mapper.MetroStationMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.mu.transitmap.entity.MetroStation">
+        <id column="id" property="id" />
+        <result column="country_id" property="countryId" />
+        <result column="country_name" property="countryName" />
+        <result column="osmid" property="osmid" />
+        <result column="station_name" property="stationName" />
+        <result column="station_name_en" property="stationNameEn" />
+        <result column="station_alias" property="stationAlias" />
+        <result column="longitude" property="longitude" />
+        <result column="latitude" property="latitude" />
+        <result column="is_transfer" property="isTransfer" />
+        <result column="line_ids" property="lineIds" />
+        <result column="line_names" property="lineNames" />
+        <result column="exit_count" property="exitCount" />
+        <result column="has_toilet" property="hasToilet" />
+        <result column="station_type" property="stationType" />
+        <result column="open_date" property="openDate" />
+        <result column="city_id" property="cityId" />
+        <result column="city_name" property="cityName" />
+        <result column="first_time" property="firstTime" />
+        <result column="last_time" property="lastTime" />
+        <result column="prev_station_ids" property="prevStationIds" />
+        <result column="prev_station_names" property="prevStationNames" />
+        <result column="prev_station_distances" property="prevStationDistances" />
+        <result column="next_station_ids" property="nextStationIds" />
+        <result column="next_station_names" property="nextStationNames" />
+        <result column="next_station_distances" property="nextStationDistances" />
+        <result column="status_code" property="statusCode" />
+        <result column="status" property="status" />
+        <result column="extra" property="extra" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, country_id, country_name, osmid, station_name, station_name_en, station_alias, longitude, latitude, is_transfer, line_ids, line_names, exit_count, has_toilet, station_type, open_date, city_id, city_name, first_time, last_time, prev_station_ids, prev_station_names, prev_station_distances, next_station_ids, next_station_names, next_station_distances, status_code, status, extra, created_at, updated_at
+    </sql>
+
+</mapper>

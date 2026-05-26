@@ -1,0 +1,1191 @@
+<template>
+    <view class="page">
+        <!-- ─── 顶部两行 ─── -->
+        <view class="header">
+            <!-- 第一行：品牌 + 消息 + 头像 -->
+            <view class="header-row-1">
+                <view class="brand">
+                    <view class="brand-mark">
+                        <text class="brand-mark-text">METRO</text>
+                    </view>
+                    <text class="brand-title">城市轨道</text>
+                </view>
+                <view class="header-actions">
+                    <view class="ha-btn" @tap="goMessages">
+                        <text class="ha-icon">🔔</text>
+                        <view class="ha-badge" v-if="unreadCount > 0">
+                            <text class="ha-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount }}</text>
+                        </view>
+                    </view>
+                    <view class="ha-avatar" @tap="goProfile">
+                        <image class="ha-avatar-img" v-if="avatarUrl" :src="avatarUrl" mode="aspectFill"></image>
+                        <text class="ha-avatar-icon" v-else>👤</text>
+                    </view>
+                </view>
+            </view>
+            <!-- 第二行：国家 + 城市 + 查看完整地图 -->
+            <view class="header-row-2">
+                <picker mode="selector"
+                        :range="countryNames"
+                        :value="selectedCountryIndex"
+                        @change="onCountryChange">
+                    <view class="loc-chip">
+                        <text class="loc-chip-icon">🌐</text>
+                        <text class="loc-chip-text" :class="{ placeholder: !selectedCountryName }">
+                            {{ selectedCountryName || '选择国家' }}
+                        </text>
+                        <text class="loc-chip-arrow">▾</text>
+                    </view>
+                </picker>
+                <view @tap="onCityChipTap">
+                    <picker mode="selector"
+                            :range="cityNames"
+                            :value="selectedCityIndex"
+                            :disabled="!selectedCountryId"
+                            @change="onCityChange">
+                        <view class="loc-chip" :class="{ disabled: !selectedCountryId }">
+                            <text class="loc-chip-icon">🏙</text>
+                            <text class="loc-chip-text" :class="{ placeholder: !selectedCityName }">
+                                {{ selectedCityName || '选择城市' }}
+                            </text>
+                            <text class="loc-chip-arrow">▾</text>
+                        </view>
+                    </picker>
+                </view>
+                <view class="full-map-btn" :class="{ disabled: !selectedCityId }" @tap="goFullMap">
+                    <text class="fmb-icon">🗺</text>
+                    <text class="fmb-text">线网图</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- ─── 地图区（地理图，原生 <map>，占主体上半部分） ─── -->
+        <view class="map-section" v-if="cityLines.length" :style="{ width: mapWidth + 'px', height: mapHeight + 'px' }">
+            <metro-map
+                ref="metroMap"
+                :width="mapWidth"
+                :height="mapHeight"
+                :lines="cityLines"
+                :allStations="cityStations"
+                :orderedStationMap="orderedStationMap"
+                mapMode="geo"
+                :startId="startId"
+                :endId="endId"
+                :routePath="pathRoute"
+                @set-start="onSetStart"
+                @set-end="onSetEnd"
+            ></metro-map>
+        </view>
+
+        <!-- ─── 滚动区（行程规划 + 路线结果） ─── -->
+        <scroll-view scroll-y class="body" :scroll-top="scrollTop">
+            <!-- 线路预览（横向滚动）-->
+            <view v-if="cityLines.length" class="lines-preview">
+                <scroll-view scroll-x class="lp-scroll">
+                    <view v-for="line in cityLines" :key="line.id"
+                          class="lp-pill"
+                          :style="{ borderColor: (line.lineColor || '#1a73e8') + '40', background: (line.lineColor || '#1a73e8') + '10' }">
+                        <view class="lp-dot" :style="{ background: line.lineColor || '#1a73e8' }"></view>
+                        <text class="lp-name" :style="{ color: line.lineColor || '#1a73e8' }">{{ line.lineName }}</text>
+                    </view>
+                </scroll-view>
+            </view>
+
+            <!-- 行程规划卡 -->
+            <view class="planner-card" v-if="cityLines.length">
+                <view class="pc-header">
+                    <view class="pc-title-row">
+                        <view class="pc-title-mark"></view>
+                        <text class="pc-title">规划行程</text>
+                    </view>
+                    <text class="pc-hint" v-if="!startId && !endId">选择起终点</text>
+                </view>
+
+                <view class="pc-stations">
+                    <view class="pc-row" @tap="openPicker('start')">
+                        <view class="pc-marker pc-start">
+                            <view class="pc-marker-inner"></view>
+                        </view>
+                        <view class="pc-info">
+                            <text class="pc-label">出发站</text>
+                            <text class="pc-value" :class="{ placeholder: !startName }">{{ startName || '点击选择' }}</text>
+                        </view>
+                        <text class="pc-arrow">›</text>
+                    </view>
+
+                    <view class="pc-divider-row">
+                        <view class="pc-divider-line"></view>
+                        <view class="pc-swap" @tap="swapStations">
+                            <text class="pc-swap-icon">⇅</text>
+                        </view>
+                        <view class="pc-divider-line"></view>
+                    </view>
+
+                    <view class="pc-row" @tap="openPicker('end')">
+                        <view class="pc-marker pc-end">
+                            <view class="pc-marker-inner"></view>
+                        </view>
+                        <view class="pc-info">
+                            <text class="pc-label">到达站</text>
+                            <text class="pc-value" :class="{ placeholder: !endName }">{{ endName || '点击选择' }}</text>
+                        </view>
+                        <text class="pc-arrow">›</text>
+                    </view>
+                </view>
+
+                <view class="search-btn" :class="{ active: startId && endId }" @tap="searchRoute">
+                    <text class="search-btn-text">查询路线</text>
+                </view>
+            </view>
+
+            <!-- 路线结果（车票样式） -->
+            <view class="ticket-wrap" v-if="routeResult">
+                <view class="ticket">
+                    <view class="ticket-perf ticket-perf-top">
+                        <view class="tp-hole" v-for="i in 12" :key="'top-'+i"></view>
+                    </view>
+                    <view class="ticket-body">
+                        <view class="tk-header">
+                            <view class="tk-tag">
+                                <text class="tk-tag-text">单程车票</text>
+                            </view>
+                            <text class="tk-time">{{ currentTime }}</text>
+                        </view>
+                        <view class="tk-od">
+                            <view class="tk-od-side">
+                                <text class="tk-od-label">出发</text>
+                                <text class="tk-od-name">{{ startName }}</text>
+                            </view>
+                            <view class="tk-od-arrow">
+                                <view class="tk-arrow-line"></view>
+                                <view class="tk-arrow-badge">
+                                    <text class="tk-arrow-stops">{{ routeResult.totalStops }}</text>
+                                    <text class="tk-arrow-unit">站</text>
+                                </view>
+                                <view class="tk-arrow-line"></view>
+                            </view>
+                            <view class="tk-od-side tk-od-side-end">
+                                <text class="tk-od-label">到达</text>
+                                <text class="tk-od-name">{{ endName }}</text>
+                            </view>
+                        </view>
+                        <view class="tk-meta">
+                            <view class="tk-meta-item">
+                                <text class="tk-meta-value">{{ estimatedTime }}</text>
+                                <text class="tk-meta-label">分钟</text>
+                            </view>
+                            <view class="tk-meta-divider"></view>
+                            <view class="tk-meta-item">
+                                <text class="tk-meta-value">{{ estimatedDistance }}</text>
+                                <text class="tk-meta-label">公里</text>
+                            </view>
+                            <view class="tk-meta-divider"></view>
+                            <view class="tk-meta-item">
+                                <text class="tk-meta-value tk-meta-price">¥{{ estimatedPrice }}</text>
+                                <text class="tk-meta-label">票价</text>
+                            </view>
+                        </view>
+                        <view class="tk-stations">
+                            <text class="tk-stations-title">途经 {{ pathRoute.length }} 站</text>
+                            <scroll-view scroll-x class="tk-stations-scroll">
+                                <view class="tk-stations-list">
+                                    <view v-for="(sid, idx) in pathRoute" :key="sid" class="tk-st">
+                                        <view class="tk-st-dot" :class="{ start: idx === 0, end: idx === pathRoute.length - 1 }"></view>
+                                        <text class="tk-st-name">{{ getStationName(sid) }}</text>
+                                        <text class="tk-st-arrow" v-if="idx < pathRoute.length - 1">›</text>
+                                    </view>
+                                </view>
+                            </scroll-view>
+                        </view>
+                    </view>
+                    <view class="ticket-perf ticket-perf-bottom">
+                        <view class="tp-hole" v-for="i in 12" :key="'bot-'+i"></view>
+                    </view>
+                    <view class="ticket-buy">
+                        <view class="tb-price-wrap">
+                            <text class="tb-currency">¥</text>
+                            <text class="tb-amount">{{ estimatedPrice }}</text>
+                            <text class="tb-unit">/单程</text>
+                        </view>
+                        <view class="tb-btn" @tap="handleBuy">
+                            <text class="tb-btn-text">立即购票</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 空态 -->
+            <view class="empty-state" v-if="!cityLines.length">
+                <view class="empty-illustration">
+                    <view class="ei-line ei-line-1"></view>
+                    <view class="ei-line ei-line-2"></view>
+                    <view class="ei-station ei-station-1"></view>
+                    <view class="ei-station ei-station-2"></view>
+                    <view class="ei-station ei-station-3"></view>
+                </view>
+                <text class="empty-title">{{ loading ? '加载中...' : (selectedCountryId ? '请选择城市' : '请选择国家') }}</text>
+                <text class="empty-sub">{{ loading ? '正在为您加载线网' : '从顶部下拉中选择' }}</text>
+            </view>
+
+            <view class="bottom-spacer"></view>
+        </scroll-view>
+
+        <!-- 站点选择弹窗 -->
+        <station-picker-popup
+            :visible="showPicker"
+            :title="pickerType === 'start' ? '选择出发站' : '选择到达站'"
+            :lines="cityLines"
+            :allStations="cityStations"
+            :orderedStationMap="orderedStationMap"
+            :selectedId="pickerType === 'start' ? startId : endId"
+            @close="showPicker = false"
+            @select="selectStation"
+        />
+    </view>
+</template>
+
+<script>
+    import { getPublicCities, getPublicCountries, getMetroLines, getMetroStations, getLineOrderedStations } from '@/api/public'
+    import { createTicketOrder } from '@/api/ticket'
+    import { getMessageUnreadCount } from '@/api/message'
+    import { useUserStore } from '@/store/user'
+    import { calcPrice, calcMinutes, calcKm, loadConfig, getMapDimensions } from '@/utils/config'
+    import { bfsShortestPath } from '@/utils/route'
+    import { fullAvatarUrl } from '@/utils/format'
+    import MetroMap from '@/components/metro-map.uvue'
+    import StationPickerPopup from '@/components/station-picker-popup.uvue'
+
+    const userStore = useUserStore()
+
+    export default {
+        components: { MetroMap, StationPickerPopup },
+        data() {
+            return {
+                loading: false,
+                countries: [],
+                cities: [],
+                allLines: [],
+                allStations: [],
+                selectedCountryId: null,
+                selectedCountryName: '',
+                selectedCityId: null,
+                selectedCityName: '',
+                cityLines: [],
+                cityStations: [],
+                orderedStationMap: {},
+                startId: null,
+                endId: null,
+                startName: '',
+                endName: '',
+                showPicker: false,
+                pickerType: 'start',
+                routeResult: null,
+                pathRoute: [],
+                unreadCount: 0,
+                pollTimer: null,
+                scrollTop: 0,
+                avatarUrl: '',
+                currentTime: '',
+                mapWidth: 375,
+                mapHeight: 360
+            }
+        },
+        computed: {
+            countryCities() {
+                if (!this.selectedCountryId) return []
+                return this.cities.filter(c => String(c.countryId) === String(this.selectedCountryId))
+            },
+            countryNames() {
+                return this.countries.map(c => c.countryName)
+            },
+            cityNames() {
+                return this.countryCities.map(c => c.cityName)
+            },
+            selectedCountryIndex() {
+                const idx = this.countries.findIndex(c => c.id === this.selectedCountryId)
+                return idx >= 0 ? idx : 0
+            },
+            selectedCityIndex() {
+                const idx = this.countryCities.findIndex(c => c.id === this.selectedCityId)
+                return idx >= 0 ? idx : 0
+            },
+            estimatedTime() {
+                return this.routeResult ? calcMinutes(this.routeResult.totalStops) : 0
+            },
+            estimatedDistance() {
+                return this.routeResult ? calcKm(this.routeResult.totalStops) : 0
+            },
+            estimatedPrice() {
+                return this.routeResult ? calcPrice(this.routeResult.totalStops) : 0
+            }
+        },
+        async onLoad() {
+            await loadConfig()
+            this.applyMapDimensions()
+            this.refreshAvatar()
+            this.updateTime()
+            this.loadData()
+        },
+        onShow() {
+            this.refreshAvatar()
+            this.fetchUnread()
+        },
+        onPullDownRefresh() {
+            this.loadData().then(() => uni.stopPullDownRefresh())
+        },
+        onUnload() { if (this.pollTimer) clearInterval(this.pollTimer) },
+        methods: {
+            updateTime() {
+                const now = new Date()
+                const pad = n => String(n).padStart(2, '0')
+                this.currentTime = `${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+            },
+            applyMapDimensions() {
+                const dims = getMapDimensions()
+                this.mapWidth = dims.width
+                this.mapHeight = dims.height
+            },
+            onSetStart(station) {
+                this.startId = String(station.id)
+                this.startName = station.stationName
+                if (this.startId && this.endId) this.searchRoute()
+            },
+            onSetEnd(station) {
+                this.endId = String(station.id)
+                this.endName = station.stationName
+                if (this.startId && this.endId) this.searchRoute()
+            },
+            refreshAvatar() {
+                this.avatarUrl = fullAvatarUrl(userStore.state.avatar)
+            },
+            onCountryChange(e) {
+                const idx = parseInt(e.detail.value)
+                if (idx >= 0 && idx < this.countries.length) {
+                    this.selectCountry(this.countries[idx])
+                }
+            },
+            onCityChange(e) {
+                const idx = parseInt(e.detail.value)
+                if (idx >= 0 && idx < this.countryCities.length) {
+                    this.selectCity(this.countryCities[idx])
+                }
+            },
+            onCityChipTap() {
+                if (!this.selectedCountryId) {
+                    uni.showToast({ title: '请先选择国家', icon: 'none' })
+                }
+            },
+            selectCountry(c) {
+                this.selectedCountryId = c.id
+                this.selectedCountryName = c.countryName
+                this.selectedCityId = null
+                this.selectedCityName = ''
+                this.cityLines = []
+                this.cityStations = []
+                this.orderedStationMap = {}
+                this.clearRoute()
+            },
+            selectCity(c) {
+                this.selectedCityId = c.id
+                this.selectedCityName = c.cityName
+                this.clearRoute()
+                this.cityLines = this.allLines.filter(l => String(l.cityId) === String(c.id))
+                this.cityStations = this.allStations.filter(s => String(s.cityId) === String(c.id))
+                this.loadOrderedStations()
+            },
+            goFullMap() {
+                if (!this.selectedCityId) {
+                    uni.showToast({ title: '请先选择城市', icon: 'none' })
+                    return
+                }
+                const url = `/pages/map/full?cityId=${this.selectedCityId}&cityName=${encodeURIComponent(this.selectedCityName)}`
+                uni.navigateTo({ url })
+            },
+            goMessages() {
+                if (!userStore.isLoggedIn()) {
+                    uni.showToast({ title: '请先登录', icon: 'none' })
+                    return
+                }
+                uni.navigateTo({ url: '/pages/message/message' })
+            },
+            goProfile() {
+                uni.switchTab({ url: '/pages/my/my' })
+            },
+            getStationName(id) {
+                const s = this.allStations.find(x => String(x.id) === String(id))
+                return s ? s.stationName : id
+            },
+            openPicker(type) {
+                if (!this.cityLines.length) {
+                    uni.showToast({ title: '请先选择城市', icon: 'none' })
+                    return
+                }
+                this.pickerType = type
+                this.showPicker = true
+            },
+            selectStation(s) {
+                if (this.pickerType === 'start') {
+                    this.startId = String(s.id)
+                    this.startName = s.stationName
+                } else {
+                    this.endId = String(s.id)
+                    this.endName = s.stationName
+                }
+                this.showPicker = false
+                this.routeResult = null
+                this.pathRoute = []
+            },
+            swapStations() {
+                const tId = this.startId, tN = this.startName
+                this.startId = this.endId
+                this.startName = this.endName
+                this.endId = tId
+                this.endName = tN
+                if (this.routeResult && this.startId && this.endId) this.searchRoute()
+            },
+            clearRoute() {
+                this.routeResult = null
+                this.pathRoute = []
+            },
+            searchRoute() {
+                if (!this.startId || !this.endId) {
+                    uni.showToast({ title: '请选择起终点站', icon: 'none' })
+                    return
+                }
+                if (this.startId === this.endId) {
+                    uni.showToast({ title: '起终点不能相同', icon: 'none' })
+                    return
+                }
+                const found = bfsShortestPath(this.allStations, this.startId, this.endId)
+                if (found) {
+                    this.pathRoute = found
+                    this.routeResult = { totalStops: found.length - 1 }
+                    this.updateTime()
+                    this.scrollTop = 9999
+                } else {
+                    uni.showToast({ title: '未找到可用路线', icon: 'none' })
+                }
+            },
+            handleBuy() {
+                if (!userStore.isLoggedIn()) {
+                    uni.showModal({
+                        title: '提示', content: '购票需要先登录',
+                        confirmText: '去登录',
+                        success: r => { if (r.confirm) uni.navigateTo({ url: '/pages/login/login' }) }
+                    })
+                    return
+                }
+                uni.showModal({
+                    title: '确认购票',
+                    content: `${this.startName} → ${this.endName}\n${this.routeResult.totalStops}站 · ¥${this.estimatedPrice}`,
+                    success: async r => {
+                        if (!r.confirm) return
+                        try {
+                            const res = await createTicketOrder({
+                                startStationId: this.startId,
+                                endStationId: this.endId,
+                                quantity: 1
+                            })
+                            if (res.code === 200) {
+                                uni.showToast({ title: '下单成功', icon: 'success' })
+                                this.clearRoute()
+                                setTimeout(() => uni.switchTab({ url: '/pages/orders/orders' }), 800)
+                            }
+                        } catch {}
+                    }
+                })
+            },
+            async loadOrderedStations() {
+                const map = {}
+                const tasks = this.cityLines.map(async (line) => {
+                    try {
+                        const res = await getLineOrderedStations(line.id)
+                        if (res.code === 200 && res.data) {
+                            const arr = Array.isArray(res.data) ? res.data : (res.data.stations || [])
+                            map[line.id] = arr
+                        }
+                    } catch {}
+                })
+                await Promise.all(tasks)
+                this.orderedStationMap = map
+            },
+            async fetchUnread() {
+                if (!userStore.isLoggedIn()) {
+                    this.unreadCount = 0
+                    return
+                }
+                try {
+                    const res = await getMessageUnreadCount()
+                    if (res.code === 200) this.unreadCount = res.data.count || 0
+                } catch {}
+            },
+            async loadData() {
+                this.loading = true
+                try {
+                    const [cRes, coRes, lRes, sRes] = await Promise.allSettled([
+                        getPublicCities(), getPublicCountries(), getMetroLines(), getMetroStations()
+                    ])
+                    this.cities = cRes.status === 'fulfilled' ? (cRes.value.data || []) : []
+                    this.countries = coRes.status === 'fulfilled' ? (coRes.value.data || []) : []
+                    this.allLines = lRes.status === 'fulfilled' ? (lRes.value.data || []) : []
+                    this.allStations = sRes.status === 'fulfilled' ? (sRes.value.data || []) : []
+                    this.fetchUnread()
+                    if (!this.pollTimer) {
+                        this.pollTimer = setInterval(() => { this.fetchUnread() }, 30000)
+                    }
+                } catch {} finally { this.loading = false }
+            }
+        }
+    }
+</script>
+
+<style scoped>
+/* ─── 整体 ─── */
+.page {
+    width: 100vw;
+    height: 100vh;
+    background: #f7f8fa;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ─── 顶部 ─── */
+.header {
+    flex-shrink: 0;
+    background: #fff;
+    border-bottom: 1rpx solid #ebeef5;
+    padding: 16rpx 24rpx 14rpx;
+}
+.header-row-1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 14rpx;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+}
+.brand-mark {
+    background: #1a73e8;
+    padding: 5rpx 14rpx;
+    border-radius: 6rpx;
+}
+.brand-mark-text {
+    font-size: 20rpx;
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 4rpx;
+}
+.brand-title {
+    font-size: 30rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+    letter-spacing: 1rpx;
+}
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+}
+.ha-btn {
+    position: relative;
+    width: 64rpx;
+    height: 64rpx;
+    background: #f5f7fa;
+    border-radius: 12rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ha-icon { font-size: 28rpx; }
+.ha-badge {
+    position: absolute;
+    top: 4rpx; right: 4rpx;
+    min-width: 28rpx; height: 28rpx;
+    padding: 0 6rpx;
+    background: #f43f5e;
+    border-radius: 14rpx;
+    border: 2rpx solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ha-badge-text {
+    font-size: 16rpx;
+    color: #fff;
+    font-weight: 700;
+    line-height: 1;
+}
+.ha-avatar {
+    width: 64rpx;
+    height: 64rpx;
+    border-radius: 50%;
+    background: #f5f7fa;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ha-avatar-img { width: 64rpx; height: 64rpx; }
+.ha-avatar-icon { font-size: 30rpx; }
+
+.header-row-2 {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+}
+.loc-chip {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    padding: 12rpx 16rpx;
+    background: #f5f7fa;
+    border-radius: 12rpx;
+    border: 1rpx solid transparent;
+    flex-shrink: 1;
+    min-width: 0;
+}
+.loc-chip.disabled { opacity: 0.5; }
+.loc-chip-icon { font-size: 22rpx; flex-shrink: 0; }
+.loc-chip-text {
+    font-size: 24rpx;
+    font-weight: 600;
+    color: #303133;
+    max-width: 140rpx;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.loc-chip-text.placeholder {
+    color: #909399;
+    font-weight: 500;
+}
+.loc-chip-arrow {
+    font-size: 18rpx;
+    color: #909399;
+    flex-shrink: 0;
+}
+
+.full-map-btn {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    padding: 12rpx 18rpx;
+    background: #1a73e8;
+    border-radius: 12rpx;
+    flex-shrink: 0;
+}
+.full-map-btn.disabled {
+    background: #c0c4cc;
+}
+.fmb-icon { font-size: 22rpx; }
+.fmb-text {
+    font-size: 24rpx;
+    color: #fff;
+    font-weight: 700;
+}
+
+/* ─── 地图区（地理图，主体上半部分） ─── */
+.map-section {
+    flex-shrink: 0;
+    position: relative;
+    background: #f0f2f5;
+    overflow: hidden;
+    margin: 0 auto;
+}
+
+/* ─── 滚动区 ─── */
+.body {
+    flex: 1;
+    min-height: 0;
+    background: #f7f8fa;
+}
+
+/* 城市概览卡 */
+.city-overview {
+    margin: 20rpx 24rpx 0;
+    background: linear-gradient(135deg, #1a73e8, #1565c0);
+    border-radius: 18rpx;
+    padding: 22rpx 24rpx;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4rpx 16rpx rgba(26, 115, 232, 0.2);
+}
+.co-left {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    min-width: 0;
+    flex: 1;
+}
+.co-icon {
+    width: 64rpx;
+    height: 64rpx;
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.co-icon-emoji { font-size: 32rpx; }
+.co-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+    min-width: 0;
+}
+.co-name {
+    font-size: 30rpx;
+    color: #fff;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.co-meta {
+    font-size: 22rpx;
+    color: rgba(255, 255, 255, 0.85);
+}
+.co-arrow {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.22);
+    padding: 8rpx 16rpx;
+    border-radius: 20rpx;
+}
+.co-arrow-text {
+    font-size: 22rpx;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* 线路预览 */
+.lines-preview {
+    margin: 16rpx 0 0;
+}
+.lp-scroll {
+    white-space: nowrap;
+    padding: 0 24rpx;
+}
+.lp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6rpx;
+    padding: 8rpx 16rpx;
+    border-radius: 20rpx;
+    border: 1rpx solid;
+    margin-right: 10rpx;
+    flex-shrink: 0;
+}
+.lp-dot {
+    width: 12rpx;
+    height: 12rpx;
+    border-radius: 50%;
+}
+.lp-name {
+    font-size: 22rpx;
+    font-weight: 700;
+}
+
+/* 行程规划卡 */
+.planner-card {
+    margin: 20rpx 24rpx 0;
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    overflow: hidden;
+}
+.pc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18rpx 20rpx 8rpx;
+}
+.pc-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+}
+.pc-title-mark {
+    width: 6rpx;
+    height: 22rpx;
+    background: #1a73e8;
+    border-radius: 3rpx;
+}
+.pc-title {
+    font-size: 26rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.pc-hint {
+    font-size: 20rpx;
+    color: #909399;
+}
+
+.pc-stations {
+    padding: 6rpx 20rpx 0;
+}
+.pc-row {
+    display: flex;
+    align-items: center;
+    gap: 14rpx;
+    padding: 16rpx 0;
+}
+.pc-marker {
+    width: 28rpx;
+    height: 28rpx;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.pc-marker-inner {
+    width: 12rpx;
+    height: 12rpx;
+    border-radius: 50%;
+}
+.pc-start { background: rgba(52, 168, 83, 0.18); }
+.pc-start .pc-marker-inner { background: #34a853; }
+.pc-end { background: rgba(234, 67, 53, 0.18); }
+.pc-end .pc-marker-inner { background: #ea4335; }
+.pc-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2rpx;
+}
+.pc-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.pc-value {
+    font-size: 28rpx;
+    font-weight: 700;
+    color: #1a1a2e;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pc-value.placeholder {
+    color: #c0c4cc;
+    font-weight: 500;
+}
+.pc-arrow {
+    font-size: 32rpx;
+    color: #c0c4cc;
+    flex-shrink: 0;
+}
+
+.pc-divider-row {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    padding: 4rpx 14rpx 4rpx 42rpx;
+}
+.pc-divider-line {
+    flex: 1;
+    height: 1rpx;
+    background: #ebeef5;
+}
+.pc-swap {
+    width: 56rpx;
+    height: 56rpx;
+    border-radius: 50%;
+    background: #f5f8ff;
+    border: 1rpx solid #d2e3fc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pc-swap-icon {
+    font-size: 28rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+
+.search-btn {
+    margin: 14rpx 20rpx 18rpx;
+    padding: 22rpx 0;
+    background: #c0c4cc;
+    border-radius: 14rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.search-btn.active {
+    background: #1a73e8;
+    box-shadow: 0 4rpx 12rpx rgba(26, 115, 232, 0.3);
+}
+.search-btn-text {
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 4rpx;
+}
+
+/* ─── 车票样式（路线结果） ─── */
+.ticket-wrap {
+    margin: 20rpx 24rpx 0;
+}
+.ticket {
+    background: #fff;
+    border-radius: 18rpx;
+    border: 1rpx solid #ebeef5;
+    overflow: hidden;
+    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+}
+.ticket-perf {
+    height: 12rpx;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 8rpx;
+    align-items: center;
+    background: #fff;
+}
+.ticket-perf-top { border-bottom: 1rpx dashed #d0d7de; }
+.ticket-perf-bottom { border-top: 1rpx dashed #d0d7de; }
+.tp-hole {
+    width: 8rpx;
+    height: 8rpx;
+    background: #f7f8fa;
+    border-radius: 50%;
+}
+
+.ticket-body { padding: 18rpx 22rpx 14rpx; }
+.tk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14rpx;
+}
+.tk-tag {
+    background: #1a73e8;
+    padding: 4rpx 12rpx;
+    border-radius: 6rpx;
+}
+.tk-tag-text {
+    font-size: 18rpx;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 2rpx;
+}
+.tk-time {
+    font-size: 20rpx;
+    color: #909399;
+}
+
+.tk-od {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    padding: 14rpx 0;
+    border-top: 1rpx dashed #f0f2f5;
+    border-bottom: 1rpx dashed #f0f2f5;
+}
+.tk-od-side {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2rpx;
+}
+.tk-od-side-end { align-items: flex-end; }
+.tk-od-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.tk-od-name {
+    font-size: 30rpx;
+    color: #1a1a2e;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.tk-od-side-end .tk-od-name { text-align: right; }
+.tk-od-arrow {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    flex-shrink: 0;
+}
+.tk-arrow-line {
+    width: 20rpx;
+    height: 2rpx;
+    background: #1a73e8;
+}
+.tk-arrow-badge {
+    display: flex;
+    align-items: baseline;
+    gap: 2rpx;
+    background: #1a73e8;
+    padding: 4rpx 10rpx;
+    border-radius: 8rpx;
+}
+.tk-arrow-stops { font-size: 20rpx; font-weight: 800; color: #fff; line-height: 1; }
+.tk-arrow-unit { font-size: 14rpx; color: rgba(255,255,255,0.9); font-weight: 600; }
+
+.tk-meta {
+    display: flex;
+    align-items: center;
+    padding: 14rpx 0;
+}
+.tk-meta-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rpx;
+}
+.tk-meta-value {
+    font-size: 30rpx;
+    font-weight: 800;
+    color: #303133;
+    line-height: 1.1;
+}
+.tk-meta-price { color: #1a73e8; }
+.tk-meta-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.tk-meta-divider {
+    width: 1rpx;
+    height: 30rpx;
+    background: #ebeef5;
+}
+
+.tk-stations { padding-top: 12rpx; border-top: 1rpx dashed #f0f2f5; }
+.tk-stations-title {
+    font-size: 20rpx;
+    color: #909399;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8rpx;
+}
+.tk-stations-scroll { white-space: nowrap; }
+.tk-stations-list {
+    display: inline-flex;
+    align-items: center;
+}
+.tk-st {
+    display: inline-flex;
+    align-items: center;
+    gap: 6rpx;
+    flex-shrink: 0;
+}
+.tk-st-dot {
+    width: 8rpx;
+    height: 8rpx;
+    border-radius: 50%;
+    background: #c0c4cc;
+}
+.tk-st-dot.start { background: #34a853; width: 12rpx; height: 12rpx; }
+.tk-st-dot.end { background: #ea4335; width: 12rpx; height: 12rpx; }
+.tk-st-name {
+    font-size: 22rpx;
+    color: #303133;
+    font-weight: 500;
+    margin-right: 4rpx;
+}
+.tk-st-arrow { font-size: 20rpx; color: #c0c4cc; margin-right: 8rpx; }
+
+.ticket-buy {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16rpx 22rpx;
+    background: #fafbfc;
+}
+.tb-price-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 2rpx;
+}
+.tb-currency {
+    font-size: 24rpx;
+    font-weight: 700;
+    color: #1a73e8;
+}
+.tb-amount {
+    font-size: 40rpx;
+    font-weight: 800;
+    color: #1a73e8;
+    line-height: 1;
+}
+.tb-unit {
+    font-size: 20rpx;
+    color: #909399;
+    margin-left: 6rpx;
+}
+.tb-btn {
+    padding: 16rpx 32rpx;
+    background: #1a73e8;
+    border-radius: 12rpx;
+    box-shadow: 0 4rpx 12rpx rgba(26, 115, 232, 0.3);
+}
+.tb-btn-text {
+    font-size: 26rpx;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 2rpx;
+}
+
+/* ─── 空态 ─── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80rpx 40rpx;
+    gap: 16rpx;
+}
+.empty-illustration {
+    position: relative;
+    width: 280rpx;
+    height: 180rpx;
+    margin-bottom: 16rpx;
+    opacity: 0.4;
+}
+.ei-line {
+    position: absolute;
+    height: 6rpx;
+    border-radius: 3rpx;
+}
+.ei-line-1 {
+    top: 50rpx; left: 30rpx; right: 30rpx;
+    background: linear-gradient(90deg, #1a73e8, #34a853);
+}
+.ei-line-2 {
+    top: 120rpx; left: 50rpx; right: 50rpx;
+    background: linear-gradient(90deg, #f59e0b, #ea4335);
+}
+.ei-station {
+    position: absolute;
+    width: 22rpx; height: 22rpx;
+    background: #fff;
+    border: 4rpx solid #1a73e8;
+    border-radius: 50%;
+}
+.ei-station-1 { top: 42rpx; left: 60rpx; border-color: #34a853; }
+.ei-station-2 { top: 42rpx; right: 60rpx; border-color: #1a73e8; }
+.ei-station-3 { top: 112rpx; left: 50%; margin-left: -11rpx; border-color: #f59e0b; }
+.empty-title {
+    font-size: 28rpx;
+    color: #303133;
+    font-weight: 700;
+}
+.empty-sub {
+    font-size: 22rpx;
+    color: #909399;
+}
+
+.bottom-spacer { height: 40rpx; }
+</style>

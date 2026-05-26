@@ -1,0 +1,539 @@
+<template>
+    <view class="orders-page">
+        <!-- 顶部统计 -->
+        <view class="stats-bar">
+            <view class="stat-item">
+                <text class="stat-value">{{ orders.length }}</text>
+                <text class="stat-label">总订单</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+                <text class="stat-value stat-pending">{{ countByStatus(0) }}</text>
+                <text class="stat-label">待支付</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+                <text class="stat-value stat-success">{{ countByStatus(1) }}</text>
+                <text class="stat-label">已支付</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+                <text class="stat-value">¥{{ totalSpent }}</text>
+                <text class="stat-label">总花费</text>
+            </view>
+        </view>
+
+        <!-- 状态筛选 -->
+        <scroll-view scroll-x class="filter-tabs">
+            <view class="tab" :class="{ active: filter === '' }" @tap="filter = ''">
+                <text class="tab-text">全部</text>
+            </view>
+            <view class="tab" :class="{ active: filter === '0' }" @tap="filter = '0'">
+                <text class="tab-text">待支付</text>
+                <view class="tab-dot" v-if="countByStatus(0) > 0"></view>
+            </view>
+            <view class="tab" :class="{ active: filter === '1' }" @tap="filter = '1'">
+                <text class="tab-text">已支付</text>
+            </view>
+            <view class="tab" :class="{ active: filter === '2' }" @tap="filter = '2'">
+                <text class="tab-text">已使用</text>
+            </view>
+            <view class="tab" :class="{ active: filter === '5' }" @tap="filter = '5'">
+                <text class="tab-text">退票审核中</text>
+            </view>
+            <view class="tab" :class="{ active: filter === '4' }" @tap="filter = '4'">
+                <text class="tab-text">已退票</text>
+            </view>
+            <view class="tab" :class="{ active: filter === '3' }" @tap="filter = '3'">
+                <text class="tab-text">已过期</text>
+            </view>
+        </scroll-view>
+
+        <!-- 订单列表 -->
+        <scroll-view scroll-y class="order-scroll" v-if="filteredOrders.length">
+            <view class="order-list">
+                <view class="ticket-card" v-for="order in filteredOrders" :key="order.id" @tap="goDetail(order)">
+                    <!-- 顶部 -->
+                    <view class="tc-top">
+                        <view class="tc-status-tag" :style="{ background: getStatus(order.status).bg, color: getStatus(order.status).color }">
+                            <view class="tc-status-dot" :style="{ background: getStatus(order.status).color }"></view>
+                            <text class="tc-status-text" :style="{ color: getStatus(order.status).color }">{{ getStatus(order.status).text }}</text>
+                        </view>
+                        <text class="tc-no">{{ order.orderNo }}</text>
+                    </view>
+
+                    <!-- 起终站 -->
+                    <view class="tc-route">
+                        <view class="tc-route-side">
+                            <text class="tc-route-label">出发</text>
+                            <text class="tc-route-name">{{ order.startStationName }}</text>
+                        </view>
+                        <view class="tc-route-mid">
+                            <view class="tc-route-line"></view>
+                            <view class="tc-route-badge">
+                                <text class="tc-route-badge-text">{{ order.stationCount }}站</text>
+                            </view>
+                            <view class="tc-route-line"></view>
+                        </view>
+                        <view class="tc-route-side tc-route-side-end">
+                            <text class="tc-route-label">到达</text>
+                            <text class="tc-route-name">{{ order.endStationName }}</text>
+                        </view>
+                    </view>
+
+                    <!-- 撕齿分隔 -->
+                    <view class="tc-perf">
+                        <view class="tc-perf-circle tc-perf-left"></view>
+                        <view class="tc-perf-line"></view>
+                        <view class="tc-perf-circle tc-perf-right"></view>
+                    </view>
+
+                    <!-- 底部 -->
+                    <view class="tc-bottom">
+                        <view class="tc-bottom-info">
+                            <text class="tc-info-text">{{ formatDate(order.createTime) }}</text>
+                            <text class="tc-info-dot">·</text>
+                            <text class="tc-info-text">{{ calcMin(order.stationCount) }}分钟</text>
+                        </view>
+                        <view class="tc-bottom-right">
+                            <view class="tc-price">
+                                <text class="tc-price-currency">¥</text>
+                                <text class="tc-price-value">{{ order.price }}</text>
+                            </view>
+                            <view class="tc-actions" @tap.stop>
+                                <view class="tc-btn tc-btn-primary" v-if="order.status === 0" @tap="handlePay(order)">
+                                    <text class="tc-btn-text">支付</text>
+                                </view>
+                                <view class="tc-btn tc-btn-ghost" v-if="order.status === 0" @tap="handleCancel(order)">
+                                    <text class="tc-btn-text-ghost">取消</text>
+                                </view>
+                                <view class="tc-btn tc-btn-primary" v-if="order.status === 1" @tap="goQrCode(order)">
+                                    <text class="tc-btn-text">扫码进站</text>
+                                </view>
+                                <view class="tc-btn tc-btn-ghost" v-if="order.status === 2" @tap="goDetail(order)">
+                                    <text class="tc-btn-text-ghost">查看详情</text>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+            </view>
+            <view class="bottom-spacer"></view>
+        </scroll-view>
+
+        <!-- 空态 -->
+        <view class="empty-wrap" v-else-if="!loading">
+            <empty-state
+                :icon="filter === '' ? '🎫' : '🔍'"
+                :title="filter === '' ? '还没有订单' : '没有该状态的订单'"
+                :sub="filter === '' ? '快去查询路线开启出行吧' : '换个筛选条件试试'"
+                :actionText="filter === '' ? '去查询路线' : ''"
+                @action="goHome"
+            />
+        </view>
+
+        <!-- 加载中 -->
+        <view class="loading-wrap" v-else>
+            <text class="loading-text">加载中...</text>
+        </view>
+    </view>
+</template>
+
+<script>
+    import { getMyTicketOrders, payTicketOrder, cancelTicketOrder } from '@/api/ticket'
+    import { useUserStore } from '@/store/user'
+    import { getOrderStatus, formatDate, formatPrice } from '@/utils/format'
+    import { calcMinutes } from '@/utils/config'
+    import EmptyState from '@/components/empty-state.uvue'
+
+    const userStore = useUserStore()
+
+    export default {
+        components: { EmptyState },
+        data() {
+            return {
+                orders: [], loading: false, filter: '', pollTimer: null
+            }
+        },
+        computed: {
+            filteredOrders() {
+                if (!this.filter) return this.orders
+                return this.orders.filter(o => String(o.status) === this.filter)
+            },
+            totalSpent() {
+                const total = this.orders
+                    .filter(o => Number(o.status) === 1 || Number(o.status) === 2)
+                    .reduce((sum, o) => sum + Number(o.price || 0), 0)
+                return total.toFixed(2)
+            }
+        },
+        onLoad() {
+            this.fetchOrders()
+            this.pollTimer = setInterval(() => { this.fetchOrders() }, 30000)
+        },
+        onShow() {
+            // 从详情页返回时刷新
+            this.fetchOrders()
+        },
+        onPullDownRefresh() {
+            this.fetchOrders().then(() => uni.stopPullDownRefresh())
+        },
+        onUnload() {
+            if (this.pollTimer) clearInterval(this.pollTimer)
+        },
+        methods: {
+            getStatus(s) { return getOrderStatus(s) },
+            countByStatus(s) {
+                return this.orders.filter(o => Number(o.status) === s).length
+            },
+            formatDate, formatPrice,
+            calcMin(stops) { return calcMinutes(stops || 0) },
+            goHome() {
+                uni.switchTab({ url: '/pages/index/index' })
+            },
+            goDetail(order) {
+                uni.navigateTo({ url: '/pages/orders/detail?id=' + order.id })
+            },
+            goQrCode(order) {
+                uni.navigateTo({ url: '/pages/orders/qrcode?id=' + order.id })
+            },
+            async fetchOrders() {
+                if (!userStore.isLoggedIn()) {
+                    this.orders = []
+                    return
+                }
+                this.loading = true
+                try {
+                    const res = await getMyTicketOrders()
+                    if (res.code === 200) this.orders = res.data || []
+                } catch {} finally { this.loading = false }
+            },
+            handlePay(order) {
+                uni.showModal({
+                    title: '确认支付', content: `支付 ¥${order.price}？`,
+                    success: async (r) => {
+                        if (!r.confirm) return
+                        try {
+                            const res = await payTicketOrder({ orderId: order.id })
+                            if (res.code === 200) {
+                                uni.showToast({ title: '支付成功', icon: 'success' })
+                                this.fetchOrders()
+                            }
+                        } catch {}
+                    }
+                })
+            },
+            handleCancel(order) {
+                uni.showModal({
+                    title: '取消订单', content: '确定要取消这个订单吗？',
+                    success: async (r) => {
+                        if (!r.confirm) return
+                        try {
+                            const res = await cancelTicketOrder({ orderId: order.id })
+                            if (res.code === 200) {
+                                uni.showToast({ title: '已取消', icon: 'success' })
+                                this.fetchOrders()
+                            }
+                        } catch {
+                            uni.showToast({ title: '取消失败', icon: 'none' })
+                        }
+                    }
+                })
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.orders-page {
+    min-height: 100vh;
+    background: #f7f8fa;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 统计栏 */
+.stats-bar {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    padding: 22rpx 16rpx;
+    border-bottom: 1rpx solid #ebeef5;
+    flex-shrink: 0;
+}
+.stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4rpx;
+}
+.stat-value {
+    font-size: 30rpx;
+    font-weight: 800;
+    color: #1a1a2e;
+    line-height: 1.1;
+}
+.stat-pending { color: #f59e0b; }
+.stat-success { color: #1a73e8; }
+.stat-label {
+    font-size: 20rpx;
+    color: #909399;
+}
+.stat-divider {
+    width: 1rpx;
+    height: 32rpx;
+    background: #ebeef5;
+}
+
+/* 筛选 */
+.filter-tabs {
+    display: flex;
+    gap: 12rpx;
+    padding: 18rpx 24rpx;
+    white-space: nowrap;
+    background: #fff;
+    border-bottom: 1rpx solid #ebeef5;
+    flex-shrink: 0;
+}
+.tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 10rpx 22rpx;
+    border-radius: 20rpx;
+    background: #f5f7fa;
+    flex-shrink: 0;
+}
+.tab.active {
+    background: #1a73e8;
+}
+.tab-text {
+    font-size: 24rpx;
+    color: #606266;
+    font-weight: 600;
+}
+.tab.active .tab-text { color: #fff; }
+.tab-dot {
+    position: absolute;
+    top: 4rpx; right: 4rpx;
+    width: 12rpx; height: 12rpx;
+    background: #f43f5e;
+    border-radius: 50%;
+    border: 2rpx solid #fff;
+}
+
+/* 订单滚动区 */
+.order-scroll {
+    flex: 1;
+}
+.order-list {
+    padding: 16rpx 24rpx 0;
+}
+
+/* 车票卡片 */
+.ticket-card {
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    margin-bottom: 16rpx;
+    overflow: hidden;
+}
+.tc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16rpx 20rpx 12rpx;
+}
+.tc-status-tag {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    padding: 6rpx 14rpx;
+    border-radius: 12rpx;
+}
+.tc-status-dot {
+    width: 8rpx;
+    height: 8rpx;
+    border-radius: 50%;
+}
+.tc-status-text {
+    font-size: 22rpx;
+    font-weight: 700;
+}
+.tc-no {
+    font-size: 20rpx;
+    color: #909399;
+}
+
+/* 路线 */
+.tc-route {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    padding: 8rpx 20rpx 16rpx;
+}
+.tc-route-side {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2rpx;
+}
+.tc-route-side-end {
+    align-items: flex-end;
+}
+.tc-route-label {
+    font-size: 18rpx;
+    color: #909399;
+}
+.tc-route-name {
+    font-size: 28rpx;
+    color: #1a1a2e;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.tc-route-side-end .tc-route-name { text-align: right; }
+.tc-route-mid {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    flex-shrink: 0;
+}
+.tc-route-line {
+    width: 16rpx;
+    height: 2rpx;
+    background: #1a73e8;
+}
+.tc-route-badge {
+    background: #1a73e8;
+    padding: 4rpx 10rpx;
+    border-radius: 8rpx;
+}
+.tc-route-badge-text {
+    font-size: 20rpx;
+    color: #fff;
+    font-weight: 700;
+}
+
+/* 撕齿分隔 */
+.tc-perf {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 24rpx;
+    margin: 0 12rpx;
+}
+.tc-perf-circle {
+    width: 24rpx;
+    height: 24rpx;
+    background: #f7f8fa;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.tc-perf-left { margin-left: -16rpx; }
+.tc-perf-right { margin-right: -16rpx; }
+.tc-perf-line {
+    flex: 1;
+    height: 1rpx;
+    background-image: linear-gradient(to right, #d0d7de 50%, transparent 50%);
+    background-size: 12rpx 1rpx;
+    background-repeat: repeat-x;
+}
+
+/* 底部 */
+.tc-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14rpx 20rpx 16rpx;
+}
+.tc-bottom-info {
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+}
+.tc-info-text {
+    font-size: 22rpx;
+    color: #909399;
+}
+.tc-info-dot {
+    font-size: 22rpx;
+    color: #d0d7de;
+}
+.tc-bottom-right {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+}
+.tc-price {
+    display: flex;
+    align-items: baseline;
+    gap: 2rpx;
+}
+.tc-price-currency {
+    font-size: 22rpx;
+    color: #1a73e8;
+    font-weight: 700;
+}
+.tc-price-value {
+    font-size: 32rpx;
+    color: #1a73e8;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.tc-actions {
+    display: flex;
+    gap: 8rpx;
+    align-items: center;
+}
+.tc-btn {
+    padding: 10rpx 18rpx;
+    border-radius: 10rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tc-btn-primary {
+    background: #1a73e8;
+}
+.tc-btn-text {
+    font-size: 22rpx;
+    color: #fff;
+    font-weight: 700;
+}
+.tc-btn-ghost {
+    background: #fff;
+    border: 1rpx solid #ebeef5;
+}
+.tc-btn-text-ghost {
+    font-size: 22rpx;
+    color: #606266;
+    font-weight: 600;
+}
+
+/* 空态 */
+.empty-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.loading-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 100rpx 0;
+}
+.loading-text {
+    font-size: 26rpx;
+    color: #c0c4cc;
+}
+
+.bottom-spacer { height: 40rpx; }
+</style>

@@ -1,0 +1,77 @@
+详细含义解析
+HTTP 状态码由 3 位数字组成，按首位数字分为 5 大类，对应不同的核心语义，下面按分类解释你列出的这些常量（重点讲解常用的，废弃的会标注说明）：
+1. 1xx 信息性状态码（Informational）
+    表示请求已被服务器接收，正在处理中，是临时响应，仅作信息提示：
+    CONTINUE（100）：服务器已收到请求头，客户端可继续发送请求体（比如 POST 大请求时的 “预检”）。
+    SWITCHING_PROTOCOLS（101）：服务器同意客户端的协议切换请求（如 HTTP 切换到 WebSocket）。
+    PROCESSING（102）：服务器已接收并正在处理请求，但尚未返回响应（多用于 WebDAV）。
+    EARLY_HINTS（103）：服务器提前返回一些响应头，让客户端先加载资源（如静态文件），提升页面加载速度。
+    CHECKPOINT（已废弃）：旧版临时状态码，6.0.5 后弃用，无实际使用价值。
+2. 2xx 成功状态码（Success）
+    表示请求已被服务器成功接收、理解并处理，是最理想的响应结果：
+    OK（200）：通用成功，请求完全处理完成（如 GET 请求返回数据）。
+    CREATED（201）：请求成功并创建了新资源（如 POST 新增数据，返回新资源的 URL）。
+    ACCEPTED（202）：请求已接收，但尚未处理完成（如异步任务提交）。
+    NON_AUTHORITATIVE_INFORMATION（203）：服务器返回的信息不是来自原始服务器（如代理返回的缓存数据）。
+    NO_CONTENT（204）：请求成功，但无返回内容（如 DELETE 删除数据，仅告知成功）。
+    RESET_CONTENT（205）：请求成功，要求客户端重置视图（如表单提交后清空表单）。
+    PARTIAL_CONTENT（206）：部分内容成功返回（如断点续传、分片下载）。
+    MULTI_STATUS（207）：多状态响应（多用于 WebDAV，一次请求处理多个资源的状态）。
+    ALREADY_REPORTED（208）：资源状态已被报告过（避免重复处理）。
+    IM_USED（226）：服务器已完成请求，且响应是对资源的增量更新。
+3. 3xx 重定向状态码（Redirection）
+    表示客户端需要进一步操作才能完成请求，通常是跳转到其他 URL：
+    MULTIPLE_CHOICES（300）：请求的资源有多个可选位置（如同一资源的不同格式）。
+    MOVED_PERMANENTLY（301）：资源永久移动到新 URL（如网站域名变更，搜索引擎会更新索引）。
+    FOUND（302）：资源临时移动到新 URL（临时跳转，搜索引擎不会更新索引）。
+    MOVED_TEMPORARILY（已废弃）：302 的旧命名，现已被FOUND替代。
+    SEE_OTHER（303）：请求应通过 GET 方法重定向到其他 URL（如 POST 提交后跳转到结果页）。
+    NOT_MODIFIED（304）：资源未修改，客户端可使用本地缓存（节省带宽，如静态资源缓存）。
+    USE_PROXY（已废弃）：要求客户端通过代理访问资源，现已弃用。
+    TEMPORARY_REDIRECT（307）：临时重定向，且要求客户端保持原请求方法（如 POST 仍用 POST）。
+    PERMANENT_REDIRECT（308）：永久重定向，且保持原请求方法。
+4. 4xx 客户端错误状态码（Client Error）
+    表示请求有语法错误或服务器无法处理（问题在客户端）：
+    BAD_REQUEST（400）：通用客户端错误（如请求参数格式错误、JSON 解析失败）。
+    UNAUTHORIZED（401）：请求需要身份认证（如未登录访问需要登录的接口）。
+    PAYMENT_REQUIRED（402）：预留状态码（暂无实际标准用途，多用于付费接口）。
+    FORBIDDEN（403）：已认证，但权限不足（如普通用户访问管理员接口）。
+    NOT_FOUND（404）：请求的资源不存在（如访问不存在的 URL、接口）。
+    METHOD_NOT_ALLOWED（405）：请求方法不被允许（如用 GET 访问仅支持 POST 的接口）。
+    NOT_ACCEPTABLE（406）：服务器无法生成客户端接受的响应格式（如客户端要求 XML，但服务器仅返回 JSON）。
+    PROXY_AUTHENTICATION_REQUIRED（407）：客户端需要先通过代理的身份认证。
+    REQUEST_TIMEOUT（408）：服务器等待请求超时（客户端未在规定时间内发送完整请求）。
+    CONFLICT（409）：请求与服务器当前状态冲突（如新增数据时主键重复）。
+    GONE（410）：资源永久删除，且无替代地址（区别于 404，410 明确表示 “曾存在但已删除”）。
+    LENGTH_REQUIRED（411）：请求需要设置Content-Length头（如 POST 请求未指定请求体长度）。
+    PRECONDITION_FAILED（412）：请求的前置条件不满足（如缓存校验失败）。
+    PAYLOAD_TOO_LARGE（413）：请求体过大（如上传文件超过服务器限制），REQUEST_ENTITY_TOO_LARGE是其废弃别名。
+    URI_TOO_LONG（414）：请求的 URL 过长（如 GET 参数拼接过多），REQUEST_URI_TOO_LONG是其废弃别名。
+    UNSUPPORTED_MEDIA_TYPE（415）：请求体的媒体类型不被支持（如上传的文件格式服务器不处理）。
+    REQUESTED_RANGE_NOT_SATISFIABLE（416）：请求的资源范围无效（如分片下载时范围超出文件大小）。
+    EXPECTATION_FAILED（417）：服务器无法满足Expect请求头的要求。
+    I_AM_A_TEAPOT（418）：趣味状态码（RFC 恶搞），表示 “服务器是茶壶，无法泡咖啡”，无实际业务用途。
+    INSUFFICIENT_SPACE_ON_RESOURCE/METHOD_FAILURE/DESTINATION_LOCKED（均废弃）：旧版非标准状态码，已弃用。
+    UNPROCESSABLE_ENTITY（422）：请求格式正确，但语义错误（如参数格式对但值不符合业务规则）。
+    LOCKED（423）：请求的资源被锁定（如文件被占用）。
+    FAILED_DEPENDENCY（424）：因依赖请求失败而失败（如批量操作中一个子请求失败）。
+    TOO_EARLY（425）：请求发送过早，服务器拒绝处理（如防止重放攻击）。
+    UPGRADE_REQUIRED（426）：服务器要求客户端升级协议（如 HTTP/1.1 升级到 HTTP/2）。
+    PRECONDITION_REQUIRED（428）：请求需要设置前置条件（如If-Match头）。
+    TOO_MANY_REQUESTS（429）：客户端请求过于频繁（触发限流、熔断）。
+    REQUEST_HEADER_FIELDS_TOO_LARGE（431）：请求头过大（如 Cookie 过多）。
+    UNAVAILABLE_FOR_LEGAL_REASONS（451）：因法律原因无法访问（如被屏蔽的资源）。
+5. 5xx 服务器错误状态码（Server Error）
+    表示服务器在处理合法请求时发生意外错误（问题在服务端）：
+    INTERNAL_SERVER_ERROR（500）：通用服务器错误（如代码抛未捕获的异常）。
+    NOT_IMPLEMENTED（501）：服务器未实现该请求的功能（如访问未开发的接口）。
+    BAD_GATEWAY（502）：网关 / 代理服务器收到上游服务器的无效响应（如 Nginx 转发到异常的后端服务）。
+    SERVICE_UNAVAILABLE（503）：服务器暂时不可用（如服务过载、维护中）。
+    GATEWAY_TIMEOUT（504）：网关 / 代理服务器等待上游服务器响应超时。
+    HTTP_VERSION_NOT_SUPPORTED（505）：服务器不支持请求的 HTTP 版本（如仅支持 HTTP/1.1，客户端用了 HTTP/3）。
+    VARIANT_ALSO_NEGOTIATES（506）：服务器配置错误，协商过程出错。
+    INSUFFICIENT_STORAGE（507）：服务器存储不足（如磁盘满）。
+    LOOP_DETECTED（508）：服务器检测到无限循环（如递归请求）。
+    BANDWIDTH_LIMIT_EXCEEDED（509）：服务器带宽超限（非标准状态码，部分厂商自定义）。
+    NOT_EXTENDED（510）：请求需要扩展服务器功能，但未扩展。
+    NETWORK_AUTHENTICATION_REQUIRED（511）：需要网络层面的认证（如 WiFi 认证后才能访问）。

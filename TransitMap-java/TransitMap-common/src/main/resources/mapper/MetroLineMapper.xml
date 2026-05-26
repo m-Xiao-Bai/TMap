@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mu.transitmap.mapper.MetroLineMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.mu.transitmap.entity.MetroLine">
+        <id column="id" property="id" />
+        <result column="country_id" property="countryId" />
+        <result column="country_name" property="countryName" />
+        <result column="line_name" property="lineName" />
+        <result column="line_no" property="lineNo" />
+        <result column="line_color" property="lineColor" />
+        <result column="line_color_cn" property="lineColorCn" />
+        <result column="city_id" property="cityId" />
+        <result column="city_name" property="cityName" />
+        <result column="city_name_en" property="cityNameEn" />
+        <result column="total_km" property="totalKm" />
+        <result column="station_count" property="stationCount" />
+        <result column="transfer_line_count" property="transferLineCount" />
+        <result column="transfer_lines" property="transferLines" />
+        <result column="transfer_station_count" property="transferStationCount" />
+        <result column="transfer_stations" property="transferStations" />
+        <result column="train_count" property="trainCount" />
+        <result column="avg_speed" property="avgSpeed" />
+        <result column="first_time" property="firstTime" />
+        <result column="last_time" property="lastTime" />
+        <result column="full_time" property="fullTime" />
+        <result column="open_date" property="openDate" />
+        <result column="status_code" property="statusCode" />
+        <result column="status" property="status" />
+        <result column="extra" property="extra" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, country_id, country_name, line_name, line_no, line_color, line_color_cn, city_id, city_name, city_name_en, total_km, station_count, transfer_line_count, transfer_lines, transfer_station_count, transfer_stations, train_count, avg_speed, first_time, last_time, full_time, open_date, status_code, status, extra, created_at, updated_at
+    </sql>
+
+</mapper>

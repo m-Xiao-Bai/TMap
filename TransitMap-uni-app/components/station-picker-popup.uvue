@@ -1,0 +1,213 @@
+<template>
+    <view v-if="visible" class="picker-mask" @tap="handleClose">
+        <view class="picker-popup" @tap.stop>
+            <view class="popup-handle"></view>
+            <view class="popup-head">
+                <text class="popup-title">{{ title }}</text>
+                <view class="popup-close-btn" @tap="handleClose">
+                    <text class="popup-close">✕</text>
+                </view>
+            </view>
+
+            <view class="picker-back" v-if="activeLineId" @tap="activeLineId = null">
+                <text class="pb-icon">←</text>
+                <text class="pb-text">返回线路列表</text>
+            </view>
+
+            <!-- 线路列表 -->
+            <scroll-view scroll-y class="popup-scroll" v-if="!activeLineId">
+                <view class="line-list">
+                    <view class="ll-item" v-for="line in lines" :key="line.id" @tap="activeLineId = line.id">
+                        <view class="ll-color-box" :style="{ background: (line.lineColor || '#1a73e8') + '20' }">
+                            <view class="ll-color" :style="{ background: line.lineColor || '#1a73e8' }"></view>
+                        </view>
+                        <view class="ll-info">
+                            <text class="ll-name">{{ line.lineName }}</text>
+                            <text class="ll-count">{{ getCount(line) }} 站</text>
+                        </view>
+                        <text class="ll-arrow">›</text>
+                    </view>
+                </view>
+            </scroll-view>
+
+            <!-- 站点列表 -->
+            <scroll-view scroll-y class="popup-scroll" v-else>
+                <view class="line-banner" :style="{ background: getLineColor() + '15' }">
+                    <view class="lb-dot" :style="{ background: getLineColor() }"></view>
+                    <text class="lb-name">{{ getLineName() }}</text>
+                    <text class="lb-count">{{ activeStations.length }} 站</text>
+                </view>
+                <view class="station-list">
+                    <view class="sl-item"
+                          v-for="(s, idx) in activeStations"
+                          :key="s.id"
+                          :class="{ selected: String(selectedId) === String(s.id) }"
+                          @tap="handleSelect(s)">
+                        <view class="sl-num" :style="{ background: getLineColor() }">{{ idx + 1 }}</view>
+                        <text class="sl-name">{{ s.stationName }}</text>
+                        <text class="sl-transfer" v-if="s.isTransfer === 1">换乘</text>
+                        <text class="sl-check" v-if="String(selectedId) === String(s.id)">✓</text>
+                    </view>
+                </view>
+            </scroll-view>
+        </view>
+    </view>
+</template>
+
+<script>
+    import { orderStationsByAdjacency } from '@/utils/route'
+
+    export default {
+        name: 'station-picker-popup',
+        props: {
+            visible: { type: Boolean, default: false },
+            title: { type: String, default: '选择站点' },
+            lines: { type: Array, default: () => [] },
+            allStations: { type: Array, default: () => [] },
+            orderedStationMap: { type: Object, default: () => ({}) },
+            selectedId: { type: [String, Number], default: null }
+        },
+        data() {
+            return { activeLineId: null }
+        },
+        computed: {
+            activeStations() {
+                if (!this.activeLineId) return []
+                const lineStations = this.allStations.filter(s => {
+                    try { return JSON.parse(s.lineIds || '[]').includes(String(this.activeLineId)) }
+                    catch { return false }
+                })
+                return orderStationsByAdjacency(lineStations, this.activeLineId)
+            }
+        },
+        methods: {
+            getCount(line) {
+                const raw = this.orderedStationMap[line.id]
+                const stations = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.stations) ? raw.stations : [])
+                return stations.length
+            },
+            getLineColor() {
+                const l = this.lines.find(x => String(x.id) === String(this.activeLineId))
+                return l ? (l.lineColor || '#1a73e8') : '#1a73e8'
+            },
+            getLineName() {
+                const l = this.lines.find(x => String(x.id) === String(this.activeLineId))
+                return l ? l.lineName : ''
+            },
+            handleClose() {
+                this.activeLineId = null
+                this.$emit('close')
+            },
+            handleSelect(station) {
+                this.$emit('select', station)
+                this.activeLineId = null
+            }
+        }
+    }
+</script>
+
+<style scoped>
+.picker-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: flex-end;
+    z-index: 999;
+}
+.picker-popup {
+    width: 100%;
+    max-height: 80vh;
+    background: #fff;
+    border-radius: 28rpx 28rpx 0 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.popup-handle {
+    width: 80rpx;
+    height: 8rpx;
+    background: #e0e0e0;
+    border-radius: 4rpx;
+    margin: 14rpx auto 0;
+    flex-shrink: 0;
+}
+.popup-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18rpx 28rpx 22rpx;
+    flex-shrink: 0;
+}
+.popup-title { font-size: 32rpx; font-weight: 700; color: #1a1a2e; }
+.popup-close-btn {
+    width: 56rpx; height: 56rpx; border-radius: 50%;
+    background: #f5f7fa;
+    display: flex; align-items: center; justify-content: center;
+}
+.popup-close { font-size: 26rpx; color: #606266; }
+
+.picker-back {
+    display: flex; align-items: center; gap: 8rpx;
+    padding: 14rpx 28rpx;
+    background: #f5f7fa;
+    flex-shrink: 0;
+}
+.pb-icon { font-size: 26rpx; color: #1a73e8; font-weight: 700; }
+.pb-text { font-size: 26rpx; color: #1a73e8; font-weight: 600; }
+
+.popup-scroll { flex: 1; }
+
+.line-list { padding: 16rpx 24rpx; }
+.ll-item {
+    display: flex; align-items: center;
+    padding: 22rpx 16rpx; margin-bottom: 12rpx;
+    background: #fafbfc;
+    border: 1rpx solid #f0f2f5;
+    border-radius: 16rpx;
+}
+.ll-color-box {
+    width: 56rpx; height: 56rpx;
+    border-radius: 14rpx;
+    display: flex; align-items: center; justify-content: center;
+    margin-right: 16rpx;
+    flex-shrink: 0;
+}
+.ll-color { width: 24rpx; height: 24rpx; border-radius: 50%; }
+.ll-info { flex: 1; min-width: 0; }
+.ll-name { font-size: 28rpx; color: #303133; font-weight: 600; display: block; }
+.ll-count { font-size: 22rpx; color: #909399; margin-top: 4rpx; }
+.ll-arrow { font-size: 32rpx; color: #c0c4cc; }
+
+.line-banner {
+    display: flex; align-items: center;
+    padding: 18rpx 28rpx;
+    margin: 8rpx 0 0;
+}
+.lb-dot { width: 16rpx; height: 16rpx; border-radius: 50%; margin-right: 12rpx; }
+.lb-name { flex: 1; font-size: 26rpx; color: #303133; font-weight: 700; }
+.lb-count { font-size: 22rpx; color: #606266; }
+
+.station-list { padding: 8rpx 0 24rpx; }
+.sl-item {
+    display: flex; align-items: center;
+    padding: 22rpx 28rpx;
+    border-bottom: 1rpx solid #f5f7fa;
+}
+.sl-item.selected { background: #f5f8ff; }
+.sl-num {
+    width: 44rpx; height: 44rpx; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22rpx; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+    margin-right: 16rpx;
+}
+.sl-name { flex: 1; font-size: 28rpx; color: #303133; font-weight: 600; }
+.sl-transfer {
+    font-size: 20rpx; color: #e6a23c;
+    background: #fdf6ec; padding: 4rpx 12rpx; border-radius: 8rpx;
+    font-weight: 700;
+    margin-right: 12rpx;
+}
+.sl-check { font-size: 28rpx; color: #1a73e8; font-weight: 700; }
+</style>

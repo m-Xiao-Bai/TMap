@@ -1,0 +1,56 @@
+<template>
+    <view class="route-card">
+        <!-- 撕齿装饰 -->
+        <view class="tk-perforation tk-perforation-top">
+            <view class="tk-hole" v-for="i in 14" :key="i"></view>
+        </view>
+
+        <!-- 票面 -->
+        <view class="tk-content">
+            <slot></slot>
+        </view>
+
+        <!-- 撕齿装饰 -->
+        <view class="tk-perforation tk-perforation-bottom">
+            <view class="tk-hole" v-for="i in 14" :key="i"></view>
+        </view>
+    </view>
+</template>
+
+<script>
+    export default {
+        name: 'ticket-card'
+    }
+</script>
+
+<style scoped>
+.route-card {
+    background: #fff;
+    border-radius: 16rpx;
+    border: 1rpx solid #ebeef5;
+    overflow: hidden;
+    position: relative;
+}
+.tk-perforation {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 8rpx;
+    height: 8rpx;
+    align-items: center;
+}
+.tk-perforation-top {
+    border-bottom: 1rpx dashed #d0d7de;
+}
+.tk-perforation-bottom {
+    border-top: 1rpx dashed #d0d7de;
+}
+.tk-hole {
+    width: 6rpx;
+    height: 6rpx;
+    background: #f7f8fa;
+    border-radius: 50%;
+}
+.tk-content {
+    padding: 20rpx 24rpx;
+}
+</style>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mu.transitmap.mapper.CityMapper">
+
+
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.mu.transitmap.entity.City">
+        <id column="id" property="id" />
+        <result column="country_id" property="countryId" />
+        <result column="country_name" property="countryName" />
+        <result column="city_name" property="cityName" />
+        <result column="city_name_en" property="cityNameEn" />
+        <result column="city_alias" property="cityAlias" />
+        <result column="metro_line_logo" property="metroLineLogo" />
+        <result column="metro_count" property="metroCount" />
+        <result column="metro_line_count" property="metroLineCount" />
+        <result column="hsr_count" property="hsrCount" />
+        <result column="metro_km" property="metroKm" />
+        <result column="hsr_km" property="hsrKm" />
+        <result column="population" property="population" />
+        <result column="metro_lines" property="metroLines" />
+        <result column="extra" property="extra" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, country_id, country_name, city_name, city_name_en, city_alias, metro_line_logo, metro_count, metro_line_count, hsr_count, metro_km, hsr_km, population, metro_lines, extra, created_at, updated_at
+    </sql>
+
+    <select id="selectCityPage" resultType="com.mu.transitmap.vo.CityVO">
+        SELECT
+        c.*,
+        co.country_name AS countryName
+        FROM city c
+        LEFT JOIN country co
+        ON c.country_id = co.id
+        <where>
+            <if test="query.countryId != null">
+                AND c.country_id = #{query.countryId}
+            </if>
+
+            <if test="query.statusCode != null">
+                AND c.status_code = #{query.statusCode}
+            </if>
+            <if test="query.metroCount != null">
+                AND c.metro_count &gt;= #{query.metroCount}
+            </if>
+
+            <if test="query.hsrCount != null">
+                AND c.hsr_count &gt;= #{query.hsrCount}
+            </if>
+        </where>
+    </select>
+
+</mapper>
