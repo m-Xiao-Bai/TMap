@@ -489,7 +489,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     private boolean canModifyPassword(int operatorRole) {
-        return operatorRole != UserRoleEnum.SUPER_ADMIN.getCode();
+        // 只有最高管理员 (role=4) 才能修改密码
+        return operatorRole == UserRoleEnum.ROOT_ADMIN.getCode();
     }
 
     private boolean canDeleteUser(int operatorRole, int targetRole) {

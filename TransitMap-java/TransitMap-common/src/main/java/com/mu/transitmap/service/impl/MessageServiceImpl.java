@@ -83,9 +83,23 @@ public class MessageServiceImpl extends ServiceImpl<SystemMessageMapper, SystemM
      * 管理员消息列表（target 包含 2 或 3）
      */
     public Page<SystemMessage> getAdminMessages(int page, int size, String type, Integer isRead) {
+        return getAdminMessages(page, size, type, isRead, null);
+    }
+
+    /**
+     * 管理员消息列表（支持多类型过滤）
+     *
+     * @param types 逗号分隔的类型列表，如 "ORDER_CREATED,ORDER_PAID"
+     */
+    public Page<SystemMessage> getAdminMessages(int page, int size, String type, Integer isRead, String types) {
         LambdaQueryWrapper<SystemMessage> wrapper = new LambdaQueryWrapper<SystemMessage>()
                 .in(SystemMessage::getTarget, 2, 3);
-        if (type != null && !type.isEmpty()) {
+        if (types != null && !types.isEmpty()) {
+            // 多类型过滤
+            String[] typeArray = types.split(",");
+            wrapper.in(SystemMessage::getType, java.util.Arrays.asList(typeArray));
+        } else if (type != null && !type.isEmpty()) {
+            // 单类型过滤（兼容旧接口）
             wrapper.eq(SystemMessage::getType, type);
         }
         if (isRead != null) {
@@ -135,6 +149,29 @@ public class MessageServiceImpl extends ServiceImpl<SystemMessageMapper, SystemM
     public void markAllAsReadForAdmin() {
         update(new LambdaUpdateWrapper<SystemMessage>()
                 .in(SystemMessage::getTarget, 2, 3)
+                .eq(SystemMessage::getIsRead, 0)
+                .set(SystemMessage::getIsRead, 1));
+    }
+
+    /**
+     * 按类型统计未读消息数
+     */
+    public long getUnreadCountByTypes(String... types) {
+        if (types == null || types.length == 0) return 0;
+        return count(new LambdaQueryWrapper<SystemMessage>()
+                .in(SystemMessage::getTarget, 2, 3)
+                .in(SystemMessage::getType, java.util.Arrays.asList(types))
+                .eq(SystemMessage::getIsRead, 0));
+    }
+
+    /**
+     * 按类型批量标记已读
+     */
+    public void markAsReadByTypes(String... types) {
+        if (types == null || types.length == 0) return;
+        update(new LambdaUpdateWrapper<SystemMessage>()
+                .in(SystemMessage::getTarget, 2, 3)
+                .in(SystemMessage::getType, java.util.Arrays.asList(types))
                 .eq(SystemMessage::getIsRead, 0)
                 .set(SystemMessage::getIsRead, 1));
     }

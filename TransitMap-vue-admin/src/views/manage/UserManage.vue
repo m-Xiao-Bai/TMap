@@ -265,7 +265,8 @@ const availableRoles = computed(() => {
 })
 
 const canModifyPassword = computed(() => {
-  return !isSuperAdmin.value
+  // 只有最高管理员 (role=4) 才能修改密码
+  return userStore.roleCode === 4
 })
 
 const roleTagType = (code) => {

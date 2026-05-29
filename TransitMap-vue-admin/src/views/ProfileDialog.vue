@@ -51,8 +51,8 @@
         </div>
       </el-tab-pane>
 
-      <!-- 修改密码 -->
-      <el-tab-pane label="修改密码" name="password">
+      <!-- 修改密码（仅最高管理员可见） -->
+      <el-tab-pane v-if="userStore.roleCode === 4" label="修改密码" name="password">
         <el-form :model="passwordForm" label-width="100px" style="margin-top:16px">
           <el-form-item label="当前密码">
             <el-input v-model="passwordForm.oldPassword" type="password" show-password />

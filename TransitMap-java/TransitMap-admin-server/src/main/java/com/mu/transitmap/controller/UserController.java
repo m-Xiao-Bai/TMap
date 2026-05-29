@@ -93,8 +93,13 @@ public class UserController {
     public Result<Map<String, String>> updatePassword(@RequestBody @Valid UserPasswordUpdateDTO dto,
                                                        HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
+        Integer roleCode = (Integer) request.getAttribute("roleCode");
         if (userId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        // 只有最高管理员 (role=4) 才能修改密码
+        if (roleCode == null || roleCode < 4) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         userService.updatePassword(userId, dto.getOldPassword(), dto.getNewPassword());
         return Result.success(null);

@@ -164,3 +164,168 @@ html.dark .ro-name { color: var(--tmap-text) !important; }
 html.dark .tch-hint,
 html.dark .ss-label,
 html.dark .rm-text { color: var(--tmap-text-muted) !important; }
+
+/* ===== 通用组件暗黑适配 ===== */
+
+/* 卡片 */
+html.dark .el-card {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-card__header {
+  background: var(--tmap-surface-2) !important;
+  border-bottom-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+
+/* 输入框 */
+html.dark .el-input__wrapper {
+  background: var(--tmap-surface-2) !important;
+  box-shadow: 0 0 0 1px var(--tmap-border) inset !important;
+}
+html.dark .el-input__inner {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-textarea__inner {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+  border-color: var(--tmap-border) !important;
+}
+
+/* 按钮 */
+html.dark .el-button--default {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-button--default:hover {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-primary) !important;
+  color: var(--tmap-primary) !important;
+}
+
+/* 表格 */
+html.dark .el-table {
+  background: var(--tmap-surface) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-table th,
+html.dark .el-table td,
+html.dark .el-table tr {
+  background-color: var(--tmap-surface) !important;
+  border-bottom-color: var(--tmap-border) !important;
+}
+html.dark .el-table--striped .el-table__body tr.el-table__row--striped td {
+  background: var(--tmap-surface-2) !important;
+}
+html.dark .el-table__row:hover > td.el-table__cell {
+  background: var(--tmap-surface-2) !important;
+}
+
+/* 弹窗 */
+html.dark .el-dialog,
+html.dark .el-message-box {
+  background: var(--tmap-surface) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-dialog__title,
+html.dark .el-message-box__title {
+  color: var(--tmap-text) !important;
+}
+
+/* 下拉菜单 */
+html.dark .el-dropdown-menu,
+html.dark .el-popper,
+html.dark .el-select-dropdown {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .el-dropdown-menu__item,
+html.dark .el-select-dropdown__item {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-dropdown-menu__item:hover,
+html.dark .el-select-dropdown__item:hover {
+  background: var(--tmap-surface-2) !important;
+}
+
+/* 标签 */
+html.dark .el-tag {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+
+/* 分页 */
+html.dark .el-pagination {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-pager li {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-pager li.is-active {
+  background: var(--tmap-primary) !important;
+  color: #fff !important;
+}
+
+/* 消息提示 */
+html.dark .el-message {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+
+/* 聊天组件 */
+html.dark .chat-input-box {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .message-bubble .action-btn {
+  color: var(--tmap-text-muted) !important;
+}
+html.dark .message-bubble .action-btn:hover {
+  color: var(--tmap-primary) !important;
+  background: var(--tmap-surface-2) !important;
+}
+html.dark .onboarding {
+  background: var(--tmap-surface) !important;
+}
+html.dark .onboarding-card {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .quick-chips {
+  background: var(--tmap-surface) !important;
+}
+html.dark .session-dropdown {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .session-item {
+  color: var(--tmap-text) !important;
+}
+html.dark .session-item:hover {
+  background: var(--tmap-surface-2) !important;
+}
+html.dark .voice-btn {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+
+/* 表单 */
+html.dark .el-form-item__label {
+  color: var(--tmap-text) !important;
+}
+
+/* 折叠面板 */
+html.dark .el-collapse-item__header {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+}
+
+/* 空状态 */
+html.dark .el-empty__description p {
+  color: var(--tmap-text-muted) !important;
+}

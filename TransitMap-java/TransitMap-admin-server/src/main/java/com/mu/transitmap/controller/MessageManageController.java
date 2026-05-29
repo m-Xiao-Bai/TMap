@@ -25,13 +25,14 @@ public class MessageManageController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(required = false) String type,
+            @RequestParam(required = false) String types,
             @RequestParam(required = false) Integer isRead,
             HttpServletRequest request) {
         Integer roleCode = (Integer) request.getAttribute("roleCode");
         if (roleCode == null || roleCode < 2) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return Result.success(messageService.getAdminMessages(pageNum, pageSize, type, isRead));
+        return Result.success(messageService.getAdminMessages(pageNum, pageSize, type, isRead, types));
     }
 
     @GetMapping("/unread-count")
@@ -43,6 +44,44 @@ public class MessageManageController {
         Map<String, Object> result = new HashMap<>();
         result.put("count", messageService.getAdminUnreadCount());
         return Result.success(result);
+    }
+
+    @GetMapping("/unread-by-category")
+    public Result<Map<String, Long>> unreadByCategory(HttpServletRequest request) {
+        Integer roleCode = (Integer) request.getAttribute("roleCode");
+        if (roleCode == null || roleCode < 2) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        Map<String, Long> result = new HashMap<>();
+        // 订单消息
+        result.put("order", messageService.getUnreadCountByTypes(
+                "ORDER_CREATED", "ORDER_PAID", "ORDER_USED", "ORDER_EXPIRED", "ORDER_REFUNDED", "REFUND_PENDING"));
+        // 用户消息
+        result.put("user", messageService.getUnreadCountByTypes(
+                "USER_CONTACT", "USER_FEEDBACK", "AGENT_CITY_REQUEST"));
+        // 系统通知
+        result.put("system", messageService.getUnreadCountByTypes(
+                "SYSTEM_NOTICE", "SYSTEM_UPDATE", "SYSTEM_CONFIG"));
+        // 系统异常
+        result.put("error", messageService.getUnreadCountByTypes(
+                "SYSTEM_ERROR", "SYSTEM_WARNING"));
+        // 爬虫通知
+        result.put("crawler", messageService.getUnreadCountByTypes(
+                "CRAWLER_COMPLETE", "CRAWLER_FAILED", "CRAWLER_REVIEW"));
+        return Result.success(result);
+    }
+
+    @PutMapping("/read-category")
+    public Result<Void> markCategoryRead(@RequestBody Map<String, String> body, HttpServletRequest request) {
+        Integer roleCode = (Integer) request.getAttribute("roleCode");
+        if (roleCode == null || roleCode < 2) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        String types = body.get("types");
+        if (types != null && !types.isEmpty()) {
+            messageService.markAsReadByTypes(types.split(","));
+        }
+        return Result.success(null);
     }
 
     @PutMapping("/read/{id}")

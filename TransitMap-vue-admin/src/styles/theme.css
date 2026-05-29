@@ -174,3 +174,147 @@ html.dark .el-dropdown-menu__item:hover {
 
 /* 通用文字 */
 html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: var(--tmap-text); }
+
+/* ===== 通用组件暗黑适配 ===== */
+
+/* 输入框 */
+html.dark .el-input__wrapper {
+  background: var(--tmap-surface-2) !important;
+  box-shadow: 0 0 0 1px var(--tmap-border) inset !important;
+}
+html.dark .el-input__inner {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-textarea__inner {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+  border-color: var(--tmap-border) !important;
+}
+
+/* 按钮 */
+html.dark .el-button--default {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-button--default:hover {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-sidebar-active) !important;
+  color: var(--tmap-sidebar-active) !important;
+}
+
+/* 标签 */
+html.dark .el-tag {
+  background: var(--tmap-surface-2) !important;
+  border-color: var(--tmap-border) !important;
+  color: var(--tmap-text) !important;
+}
+
+/* 分页 */
+html.dark .el-pagination {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-pager li {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-pager li.is-active {
+  background: var(--tmap-sidebar-active) !important;
+  color: #fff !important;
+}
+
+/* 表单 */
+html.dark .el-form-item__label {
+  color: var(--tmap-text) !important;
+}
+
+/* 消息提示 */
+html.dark .el-message {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .el-message__content {
+  color: var(--tmap-text) !important;
+}
+
+/* 空状态 */
+html.dark .el-empty__description p {
+  color: var(--tmap-text-muted) !important;
+}
+
+/* 进度条 */
+html.dark .el-progress-bar__outer {
+  background: var(--tmap-surface-2) !important;
+}
+
+/* 步骤条 */
+html.dark .el-step__title {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-step__description {
+  color: var(--tmap-text-muted) !important;
+}
+
+/* 时间线 */
+html.dark .el-timeline-item__content {
+  color: var(--tmap-text) !important;
+}
+html.dark .el-timeline-item__timestamp {
+  color: var(--tmap-text-muted) !important;
+}
+
+/* 折叠面板 */
+html.dark .el-collapse-item__header {
+  background: var(--tmap-surface-2) !important;
+  color: var(--tmap-text) !important;
+}
+html.dark .el-collapse-item__wrap {
+  background: var(--tmap-surface) !important;
+}
+
+/* 加载遮罩 */
+html.dark .el-loading-mask {
+  background: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* 选择器 */
+html.dark .el-select__wrapper {
+  background: var(--tmap-surface-2) !important;
+}
+
+/* 日期选择器 */
+html.dark .el-date-picker,
+html.dark .el-date-range-picker {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+
+/* 管理端特定组件 */
+html.dark .section-card {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .card-header {
+  color: var(--tmap-text) !important;
+}
+
+html.dark .stat-card {
+  background: var(--tmap-surface) !important;
+  border-color: var(--tmap-border) !important;
+}
+html.dark .stat-value {
+  color: var(--tmap-text) !important;
+}
+html.dark .stat-label {
+  color: var(--tmap-text-muted) !important;
+}
+
+/* 爬虫页面 */
+html.dark .metro-crawler .section-card {
+  background: var(--tmap-surface) !important;
+}
+
+/* 质量看板 */
+html.dark .quality-dashboard .stat-card {
+  background: var(--tmap-surface) !important;
+}
