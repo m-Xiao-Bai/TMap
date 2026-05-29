@@ -188,6 +188,12 @@ async def _insert_station(
     line_names: list[str],
 ) -> int:
     """插入站点"""
+    # 标记数据来源
+    extra = json.dumps({
+        "source": "crawler",
+        "confidence": station.confidence,
+        "sources": station.sources,
+    }, ensure_ascii=False)
     async with db_manager.get_session() as session:
         result = await session.execute(
             text("""INSERT INTO metro_station
@@ -195,12 +201,12 @@ async def _insert_station(
                      station_name, station_name_en, station_alias,
                      line_ids, line_names,
                      longitude, latitude,
-                     osmid, is_transfer, status_code, created_at, updated_at)
+                     osmid, is_transfer, status_code, extra, created_at, updated_at)
                     VALUES (:country_id, :country_name, :city_id, :city_name,
                             :station_name, :station_name_en, :station_alias,
                             :line_ids, :line_names,
                             :longitude, :latitude,
-                            :osmid, :is_transfer, 1, NOW(), NOW())"""),
+                            :osmid, :is_transfer, 1, :extra, NOW(), NOW())"""),
             {
                 "country_id": country_id,
                 "country_name": country_name,
@@ -215,6 +221,7 @@ async def _insert_station(
                 "latitude": station.lat,
                 "osmid": station.osmid or 0,
                 "is_transfer": 1 if len(line_ids) > 1 else 0,
+                "extra": extra,
             },
         )
         await session.commit()
@@ -254,6 +261,39 @@ async def _update_task_city(task_id: str, city_id: int):
             {"task_id": task_id, "city_id": city_id},
         )
         await session.commit()
+
+
+async def update_city_stats(city_id: int):
+    """
+    更新城市的 metro_count 和 metro_line_count。
+    从实际插入的站点/线路数据统计。
+    """
+    async with db_manager.get_session() as session:
+        # 统计站点数
+        result = await session.execute(
+            text("SELECT COUNT(*) FROM metro_station WHERE city_id = :city_id"),
+            {"city_id": city_id},
+        )
+        station_count = result.scalar() or 0
+
+        # 统计线路数
+        result = await session.execute(
+            text("SELECT COUNT(*) FROM metro_line WHERE city_id = :city_id"),
+            {"city_id": city_id},
+        )
+        line_count = result.scalar() or 0
+
+        # 更新城市记录
+        await session.execute(
+            text("""UPDATE city
+                    SET metro_count = :station_count,
+                        metro_line_count = :line_count,
+                        updated_at = NOW()
+                    WHERE id = :city_id"""),
+            {"city_id": city_id, "station_count": station_count, "line_count": line_count},
+        )
+        await session.commit()
+        logger.info(f"更新城市统计: city_id={city_id}, 站点={station_count}, 线路={line_count}")
 
 
 def _station_key(name: str) -> str:
