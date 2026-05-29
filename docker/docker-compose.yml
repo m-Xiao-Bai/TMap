@@ -108,6 +108,33 @@ services:
       redis:
         condition: service_healthy
 
+  python-service:
+    build:
+      context: ../TransitMap-python
+      dockerfile: Dockerfile
+    container_name: tmap-python
+    restart: always
+    env_file:
+      - ../TransitMap-python/.env
+    environment:
+      DATABASE_URL: mysql+pymysql://${DB_USERNAME}:${DB_PASSWORD}@mysql:3306/transit_map
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      JAVA_INTERNAL_API_URL: http://user-server:8888/transitMap/api/internal
+      PYTHON_SERVICE_API_KEY: ${PYTHON_SERVICE_API_KEY}
+      AMAP_API_KEY: ${GAODE_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   nginx:
     image: nginx:alpine
     container_name: tmap-nginx
@@ -121,6 +148,7 @@ services:
     depends_on:
       - admin-server
       - user-server
+      - python-service
 
 volumes:
   mysql_data:

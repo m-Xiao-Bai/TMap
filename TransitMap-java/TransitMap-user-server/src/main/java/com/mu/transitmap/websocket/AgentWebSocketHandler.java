@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mu.transitmap.agent.AgentContext;
 import com.mu.transitmap.agent.LangChain4jAgentEngine;
+import com.mu.transitmap.service.AgentEngineRouter;
 import com.mu.transitmap.service.impl.SystemConfigServiceImpl;
 import com.mu.transitmap.utils.RedisUtils;
 import org.slf4j.Logger;
@@ -42,6 +43,9 @@ public class AgentWebSocketHandler extends AbstractWebSocketHandler {
 
     @Autowired
     private LangChain4jAgentEngine engine;
+
+    @Autowired
+    private AgentEngineRouter engineRouter;
 
     @Autowired
     private AgentSessionRegistry registry;
@@ -211,14 +215,14 @@ public class AgentWebSocketHandler extends AbstractWebSocketHandler {
                 .clientIp(clientIp)
                 .build();
 
-        String runId = engine.runAsync(ctx, msg -> sendJson(ws, msg));
+        String runId = engineRouter.runAsync(ctx, msg -> sendJson(ws, msg));
         currentRunIds.put(ws.getId(), runId);
     }
 
     private void handleStop(WebSocketSession ws) {
         String runId = currentRunIds.remove(ws.getId());
         if (runId != null) {
-            engine.cancel(runId);
+            engineRouter.cancel(runId);
         }
     }
 
@@ -243,7 +247,7 @@ public class AgentWebSocketHandler extends AbstractWebSocketHandler {
                 .regenerateMessageId(messageId)
                 .build();
 
-        String runId = engine.regenerate(ctx, msg -> sendJson(ws, msg));
+        String runId = engineRouter.regenerate(ctx, msg -> sendJson(ws, msg));
         currentRunIds.put(ws.getId(), runId);
     }
 

@@ -4,6 +4,8 @@ import com.mu.transitmap.entity.SystemConfig;
 import com.mu.transitmap.enums.ErrorCode;
 import com.mu.transitmap.exception.BusinessException;
 import com.mu.transitmap.result.Result;
+import com.mu.transitmap.service.AgentEngineRouter;
+import com.mu.transitmap.service.HealthCheckScheduler;
 import com.mu.transitmap.service.LlmClient;
 import com.mu.transitmap.service.impl.SystemConfigServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +37,12 @@ public class AgentConfigManageController {
 
     @Autowired
     private com.mu.transitmap.service.AmapClient amapClient;
+
+    @Autowired
+    private AgentEngineRouter engineRouter;
+
+    @Autowired
+    private HealthCheckScheduler healthCheckScheduler;
 
     /**
      * 拉取所有 agent.* 配置
@@ -243,6 +251,32 @@ public class AgentConfigManageController {
                     + "「应用管理」检查 key 类型，或新建一个「Web服务」类型的 key。";
         }
         return "未知错误，建议直接 curl 测试：https://restapi.amap.com/v3/geocode/geo?key=YOUR_KEY&address=北京";
+    }
+
+    /**
+     * 获取引擎状态
+     */
+    @GetMapping("/engine-status")
+    public Result<Map<String, Object>> engineStatus(HttpServletRequest request) {
+        ensureRole(request);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("activeEngine", engineRouter.getActiveEngine());
+        String engineConfig = systemConfigService.getConfigValue("agent.engine");
+        data.put("configuredEngine", (engineConfig != null && !engineConfig.isEmpty()) ? engineConfig : "java");
+        data.put("pythonHealthy", engineRouter.isPythonAvailable());
+        data.put("pythonHealthDetails", healthCheckScheduler.getLastCheckDetails());
+        return Result.success(data);
+    }
+
+    /**
+     * 手动触发 Python 健康检查
+     */
+    @PostMapping("/check-python-health")
+    public Result<Map<String, Object>> checkPythonHealth(HttpServletRequest request) {
+        ensureRole(request);
+        Map<String, Object> result = healthCheckScheduler.forceCheck();
+        return Result.success(result);
     }
 
     // ===== 辅助 =====

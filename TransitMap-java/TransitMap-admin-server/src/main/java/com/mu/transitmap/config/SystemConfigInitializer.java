@@ -248,6 +248,34 @@ public class SystemConfigInitializer implements CommandLineRunner {
         ensurePublic("agent.voice.max_duration_ms");
         ensurePublic("agent.voice.send_to_input");
 
+        // ===== Python Agent 引擎配置 =====
+        initConfig("agent.engine", "string",
+                "java", "agent", "Agent 引擎选择: java（默认）/ python", 0);
+        initConfig("agent.python.url", "string",
+                "http://localhost:8000", "agent", "Python Agent 服务地址", 0);
+        initConfig("agent.python.timeout_ms", "number",
+                "60000", "agent", "Python Agent 超时时间（毫秒）", 0);
+        initConfig("agent.python.api_key", "secret",
+                "", "agent", "Python Agent API Key（AES 加密存储）", 0);
+
+        // ===== 爬虫服务配置 =====
+        initConfig("crawler.service.url", "string",
+                "http://localhost:8000", "crawler", "Python 爬虫服务地址", 0);
+        initConfig("crawler.api_key", "secret",
+                "", "crawler", "爬虫服务 API Key（AES 加密存储）", 0);
+        initConfig("crawler.llm.validate", "number",
+                "1", "crawler", "是否启用 LLM 校验（1=开启 0=关闭）", 0);
+        initConfig("crawler.amap.geocode", "number",
+                "1", "crawler", "是否启用高德坐标补全（1=开启 0=关闭）", 0);
+        initConfig("crawler.max_concurrent", "number",
+                "1", "crawler", "最大并发爬取任务数", 0);
+        initConfig("crawler.default_sources", "string",
+                "wikipedia,baike,osm", "crawler", "默认数据源（逗号分隔）", 0);
+
+        // ===== 对话质量评估配置 =====
+        initConfig("quality.auto_evaluate", "number",
+                "1", "quality", "自动评分开关（1=开启 0=关闭）", 0);
+
         systemConfigService.refreshCache();
     }
 

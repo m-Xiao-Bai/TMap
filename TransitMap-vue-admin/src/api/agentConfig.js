@@ -19,3 +19,13 @@ export function testLlm() {
 export function testAmap() {
   return request.post('/manage/agent-config/test-amap')
 }
+
+// 获取引擎状态
+export function getEngineStatus() {
+  return request.get('/manage/agent-config/engine-status')
+}
+
+// 手动触发 Python 健康检查
+export function checkPythonHealth() {
+  return request.post('/manage/agent-config/check-python-health')
+}

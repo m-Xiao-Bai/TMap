@@ -24,7 +24,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(rateLimitInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/data/**", "/error", "/swagger-ui/**", "/v3/api-docs/**", "/metro-map.html");
+                .excludePathPatterns("/data/**", "/error", "/api/internal/**", "/swagger-ui/**", "/v3/api-docs/**", "/metro-map.html");
         registry.addInterceptor(tokenInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(
@@ -35,6 +35,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/utils/**",
                         "/ws/**",
                         "/agent/**",
+                        "/api/internal/**",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                         "/metro-map.html"

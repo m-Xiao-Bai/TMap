@@ -151,6 +151,24 @@ const routes = [
         meta: { title: '订单管理', minRoleCode: 2 }
       },
       {
+        path: 'metro-crawler',
+        name: 'MetroCrawler',
+        component: () => import('@/views/manage/MetroCrawler.vue'),
+        meta: { title: '轨道数据爬取', minRoleCode: 3 }
+      },
+      {
+        path: 'station-review',
+        name: 'StationReview',
+        component: () => import('@/views/manage/StationReview.vue'),
+        meta: { title: '站点数据审核', minRoleCode: 3 }
+      },
+      {
+        path: 'quality-dashboard',
+        name: 'QualityDashboard',
+        component: () => import('@/views/manage/QualityDashboard.vue'),
+        meta: { title: '对话质量看板', minRoleCode: 3 }
+      },
+      {
         path: 'messages',
         name: 'MessageManage',
         component: () => import('@/views/manage/MessageManage.vue'),

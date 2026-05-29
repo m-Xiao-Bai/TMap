@@ -445,6 +445,68 @@
           </ConfigField>
         </el-card>
       </el-tab-pane>
+
+      <!-- 引擎状态 -->
+      <el-tab-pane name="engine">
+        <template #label>
+          <span><el-icon><Monitor /></el-icon> 引擎状态</span>
+        </template>
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-hd">
+              <span>Agent 引擎状态</span>
+              <el-button size="small" :loading="checkingHealth" @click="onCheckHealth">
+                <el-icon><Refresh /></el-icon> 刷新状态
+              </el-button>
+            </div>
+          </template>
+
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="当前引擎">
+              <el-tag :type="engineStatus.activeEngine?.includes('python') ? 'success' : 'info'" size="large">
+                {{ engineStatus.activeEngine || '加载中...' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="配置值">
+              <el-tag type="info">{{ engineStatus.configuredEngine || 'java' }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="Python 服务健康">
+              <el-tag :type="engineStatus.pythonHealthy ? 'success' : 'danger'">
+                {{ engineStatus.pythonHealthy ? '健康' : '不可用' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="最后检查时间">
+              {{ engineStatus.pythonHealthDetails?.lastCheck || '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <el-divider content-position="left">健康检查详情</el-divider>
+
+          <div v-if="engineStatus.pythonHealthDetails?.checks">
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item
+                v-for="(val, key) in engineStatus.pythonHealthDetails.checks"
+                :key="key"
+                :label="key"
+              >
+                <el-tag :type="val ? 'success' : 'danger'" size="small">
+                  {{ val ? '正常' : '异常' }}
+                </el-tag>
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+          <el-empty v-else description="暂无健康检查数据" :image-size="60" />
+
+          <el-divider content-position="left">切换引擎</el-divider>
+          <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px">
+            切换引擎后，所有新的对话将使用新引擎处理。正在中的对话不受影响。
+          </el-alert>
+          <ConfigField :cfg="cfgMap['agent.engine']" placeholder="java" />
+          <ConfigField :cfg="cfgMap['agent.python.url']" placeholder="http://localhost:8000" />
+          <ConfigField :cfg="cfgMap['agent.python.api_key']" />
+          <ConfigField :cfg="cfgMap['agent.python.timeout_ms']" placeholder="60000" />
+        </el-card>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 测试结果 dialog -->
@@ -549,10 +611,10 @@ import { ref, computed, onMounted, h } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   ChatLineRound, MapLocation, DataLine, EditPen, Microphone,
-  Promotion, Collection, Cpu, Check, Refresh, Plus, Connection, Lock
+  Promotion, Collection, Cpu, Check, Refresh, Plus, Connection, Lock, Monitor
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
-import { getAgentConfigs, updateAgentConfigs, testLlm, testAmap } from '@/api/agentConfig'
+import { getAgentConfigs, updateAgentConfigs, testLlm, testAmap, getEngineStatus, checkPythonHealth } from '@/api/agentConfig'
 import ConfigField from './components/AgentConfigField.vue'
 
 const userStore = useUserStore()
@@ -580,6 +642,15 @@ const testDialogVisible = ref(false)
 const testingLlm = ref(false)
 const testingAmap = ref(false)
 const testResult = ref({ title: '', ok: false, subtitle: '', detail: null, error: '', latencyMs: 0 })
+
+// 引擎状态
+const checkingHealth = ref(false)
+const engineStatus = ref({
+  activeEngine: '',
+  configuredEngine: 'java',
+  pythonHealthy: false,
+  pythonHealthDetails: {},
+})
 
 async function fetchConfigs() {
   loading.value = true
@@ -722,8 +793,31 @@ async function onTestAmap() {
   }
 }
 
+async function fetchEngineStatus() {
+  try {
+    const res = await getEngineStatus()
+    if (res.code === 200) {
+      engineStatus.value = res.data || {}
+    }
+  } catch {}
+}
+
+async function onCheckHealth() {
+  checkingHealth.value = true
+  try {
+    await checkPythonHealth()
+    await fetchEngineStatus()
+    ElMessage.success('健康检查完成')
+  } catch {
+    ElMessage.error('健康检查失败')
+  } finally {
+    checkingHealth.value = false
+  }
+}
+
 onMounted(() => {
   fetchConfigs()
+  fetchEngineStatus()
 })
 </script>
 

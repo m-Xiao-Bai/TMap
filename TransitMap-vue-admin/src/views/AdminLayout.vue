@@ -86,6 +86,18 @@
           <el-icon><Collection /></el-icon>
           <span>RAG 知识库</span>
         </el-menu-item>
+        <el-menu-item v-if="userStore.roleCode >= 3" index="/metro-crawler">
+          <el-icon><Download /></el-icon>
+          <span>轨道数据爬取</span>
+        </el-menu-item>
+        <el-menu-item v-if="userStore.roleCode >= 3" index="/station-review">
+          <el-icon><Checked /></el-icon>
+          <span>站点数据审核</span>
+        </el-menu-item>
+        <el-menu-item v-if="userStore.roleCode >= 3" index="/quality-dashboard">
+          <el-icon><TrendCharts /></el-icon>
+          <span>对话质量看板</span>
+        </el-menu-item>
 
         <!-- 消息中心 -->
         <div class="menu-group-label">通知</div>
@@ -139,7 +151,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Aim, Odometer, UserFilled, Flag, OfficeBuilding, Van, MapLocation, Position, Setting, Connection, Coin, Search, Ticket, Bell, ChatDotRound, Cpu, Sunny, Moon, Lock, Collection } from '@element-plus/icons-vue'
+import { Aim, Odometer, UserFilled, Flag, OfficeBuilding, Van, MapLocation, Position, Setting, Connection, Coin, Search, Ticket, Bell, ChatDotRound, Cpu, Sunny, Moon, Lock, Collection, Download, Checked, TrendCharts } from '@element-plus/icons-vue'
 import { useTheme } from '@/composables/useTheme'
 import { userLogout } from '@/api/user'
 import { getMessageUnreadCount } from '@/api/message'
@@ -182,6 +194,9 @@ const activeMenu = computed(() => {
   if (route.path.startsWith('/cache-manage')) return '/cache-manage'
   if (route.path.startsWith('/system-config')) return '/system-config'
   if (route.path.startsWith('/ticket-order-manage')) return '/ticket-order-manage'
+  if (route.path.startsWith('/metro-crawler')) return '/metro-crawler'
+  if (route.path.startsWith('/station-review')) return '/station-review'
+  if (route.path.startsWith('/quality-dashboard')) return '/quality-dashboard'
   if (route.path.startsWith('/messages')) return '/messages'
   return '/'
 })
