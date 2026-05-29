@@ -118,9 +118,25 @@ class OpenAICompatProvider(BaseLlmProvider):
                         break
                     try:
                         data = json.loads(data_str)
-                        delta = data["choices"][0].get("delta", {})
+
+                        # 检查 choices 是否存在且非空
+                        choices = data.get("choices")
+                        if not choices or len(choices) == 0:
+                            # 可能是 usage-only chunk，跳过
+                            # 提取 usage（如果有）
+                            if "usage" in data and data["usage"]:
+                                chunk = LlmStreamChunk(delta="", finish_reason="stop")
+                                chunk.usage = LlmUsage(
+                                    input_tokens=data["usage"].get("prompt_tokens", 0),
+                                    output_tokens=data["usage"].get("completion_tokens", 0),
+                                )
+                                yield chunk
+                            continue
+
+                        choice = choices[0]
+                        delta = choice.get("delta", {})
                         content = delta.get("content", "")
-                        finish_reason = data["choices"][0].get("finish_reason", "")
+                        finish_reason = choice.get("finish_reason", "")
 
                         chunk = LlmStreamChunk(
                             delta=content,
@@ -136,6 +152,9 @@ class OpenAICompatProvider(BaseLlmProvider):
 
                         yield chunk
                     except json.JSONDecodeError:
+                        continue
+                    except (KeyError, IndexError) as e:
+                        logger.debug(f"解析流式 chunk 异常: {e}, data={data_str[:200]}")
                         continue
         except httpx.HTTPStatusError as e:
             logger.error(f"[{self.name}] 流式 HTTP 错误: {e.response.status_code}")

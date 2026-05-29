@@ -1,7 +1,7 @@
 """
 Agent 服务 — API 路由
 
-使用 LangGraph 状态图处理对话，SSE 流式输出。
+使用智能 Agent 处理对话，SSE 流式输出。
 """
 
 import json
@@ -11,27 +11,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.dependencies import verify_api_key
-from app.agent.state import AgentState
 
 logger = logging.getLogger("tmap-python.agent")
 
 router = APIRouter()
 
-# LangGraph 图实例（延迟初始化）
-_agent_graph = None
-
-
-def _get_graph():
-    """延迟初始化 LangGraph 图"""
-    global _agent_graph
-    if _agent_graph is None:
-        from app.agent.graph import build_agent_graph
-        _agent_graph = build_agent_graph()
-        logger.info("LangGraph Agent 图已初始化")
-    return _agent_graph
-
-
-# ── 请求/响应模型 ──
 
 class AgentChatRequest(BaseModel):
     """Agent 对话请求"""
@@ -43,8 +27,6 @@ class AgentChatRequest(BaseModel):
     chat_history: list[dict] = []
 
 
-# ── API 端点 ──
-
 @router.post("/chat")
 async def agent_chat(
     request: AgentChatRequest,
@@ -53,48 +35,19 @@ async def agent_chat(
     """
     Agent 对话（SSE 流式）。
 
-    使用 LangGraph 状态图处理完整流程：
-    classify → intent_extract → resolve_geo → match_city → plan_route → generate_reply
+    使用智能 Agent 处理：
+    1. 上下文管理
+    2. LLM 规划
+    3. 工具执行
+    4. 智能回复
     """
-    graph = _get_graph()
-
-    # 构建初始状态
-    initial_state: AgentState = {
-        "user_message": request.user_message,
-        "session_id": request.session_id,
-        "user_id": request.user_id,
-        "lat": request.lat,
-        "lng": request.lng,
-        "chat_history": request.chat_history,
-        # 默认值
-        "intent": "chat",
-        "slot_from": None,
-        "slot_to": None,
-        "llm_inferred_city": None,
-        "from_geo": None,
-        "to_geo": None,
-        "from_city_id": None,
-        "to_city_id": None,
-        "scenario": None,
-        "from_station": None,
-        "to_station": None,
-        "route_plan": None,
-        "reply": "",
-        "cards": [],
-        "chips": [],
-        "short_circuit": False,
-        "tokens_in": 0,
-        "tokens_out": 0,
-    }
+    from app.agent.smart_agent import process_message
 
     async def event_stream():
-        """SSE 事件流"""
         try:
-            # 发送状态：正在思考
-            yield _sse({"type": "status", "text": "正在理解你的需求..."})
+            yield _sse({"type": "status", "text": "正在思考..."})
 
-            # 执行 LangGraph 图
-            result = await graph.ainvoke(initial_state)
+            result = await process_message(request.model_dump())
 
             # 发送回复
             reply = result.get("reply", "")
