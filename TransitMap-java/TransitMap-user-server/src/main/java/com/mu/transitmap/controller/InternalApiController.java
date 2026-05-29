@@ -197,7 +197,6 @@ public class InternalApiController {
             return Result.fail(400, "缺少 fromStationId/toStationId");
         }
         try {
-            // 获取站点信息以确定 cityId
             MetroStation fromStation = stationService.getById(fromId);
             if (fromStation == null) {
                 return Result.fail(404, "出发站不存在");
@@ -205,6 +204,29 @@ public class InternalApiController {
             Long cityId = fromStation.getCityId();
             var route = pathPlanningService.planRoute(fromId, toId, cityId);
             return Result.success(route);
+        } catch (Exception e) {
+            return Result.fail(500, "路径规划失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 多方案路径规划（最快 / 最少换乘 / 最短距离）
+     */
+    @PostMapping("/route/plan-multiple")
+    public Result<?> planMultipleRoutes(@RequestBody Map<String, Long> body) {
+        Long fromId = body.get("fromStationId");
+        Long toId = body.get("toStationId");
+        if (fromId == null || toId == null) {
+            return Result.fail(400, "缺少 fromStationId/toStationId");
+        }
+        try {
+            MetroStation fromStation = stationService.getById(fromId);
+            if (fromStation == null) {
+                return Result.fail(404, "出发站不存在");
+            }
+            Long cityId = fromStation.getCityId();
+            var routes = pathPlanningService.planMultipleRoutes(fromId, toId, cityId);
+            return Result.success(routes);
         } catch (Exception e) {
             return Result.fail(500, "路径规划失败: " + e.getMessage());
         }

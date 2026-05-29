@@ -22,6 +22,13 @@ public class RoutePlanVO {
     private List<Long> lineIds;
     private List<String> lineNames;
 
+    /** 路线类型: fastest / fewest_transfers / shortest_distance */
+    private String routeType;
+    /** 路线标签: 最快路线 / 最少换乘 / 最短距离 */
+    private String routeLabel;
+    /** 是否推荐路线 */
+    private Boolean recommended;
+
     @Data
     public static class StationStop {
         private Long stationId;
