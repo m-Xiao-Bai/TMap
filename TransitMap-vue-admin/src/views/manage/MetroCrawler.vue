@@ -19,13 +19,6 @@
             <el-option :value="1" label="中国" />
           </el-select>
         </el-form-item>
-        <el-form-item label="数据源">
-          <el-checkbox-group v-model="form.sources">
-            <el-checkbox label="wikipedia">维基百科</el-checkbox>
-            <el-checkbox label="baike">百度百科</el-checkbox>
-            <el-checkbox label="osm">OSM (OpenStreetMap)</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="triggering" @click="handleTrigger"
             :disabled="!serviceHealthy || !form.cityName.trim()">
@@ -130,7 +123,6 @@ const batchCities = ref('')
 const form = ref({
   cityName: '',
   countryId: 1,
-  sources: ['wikipedia', 'baike', 'osm'],
 })
 
 let pollTimer = null
@@ -184,7 +176,6 @@ const handleTrigger = async () => {
     const res = await triggerCrawl({
       city_name: form.value.cityName.trim(),
       country_id: form.value.countryId,
-      sources: form.value.sources.join(','),
     })
     if (res.code === 200) {
       ElMessage.success(`爬取任务已触发: ${res.data.task_id}`)
@@ -215,7 +206,6 @@ const handleBatchConfirm = async () => {
       cities: cities.map(c => ({
         city_name: c,
         country_id: 1,
-        sources: form.value.sources.join(','),
       })),
     })
     if (res.code === 200) {

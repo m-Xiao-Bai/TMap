@@ -59,34 +59,38 @@ class MetroRepository:
 
     async def insert_line(self, line: dict) -> int:
         """插入线路，返回 ID"""
+        from app.utils.id_generator import generate_id
+        line_id = generate_id()
         async with db_manager.get_session() as session:
-            result = await session.execute(
+            await session.execute(
                 text("""INSERT INTO metro_line
-                        (country_id, country_name, city_id, city_name, line_name, line_name_en, line_color, status, create_time, update_time)
-                        VALUES (:country_id, :country_name, :city_id, :city_name, :line_name, :line_name_en, :line_color, 1, NOW(), NOW())"""),
-                line,
+                        (id, country_id, country_name, city_id, city_name, line_name, line_name_en, line_color, status_code, created_at, updated_at)
+                        VALUES (:id, :country_id, :country_name, :city_id, :city_name, :line_name, :line_name_en, :line_color, 1, NOW(), NOW())"""),
+                {"id": line_id, **line},
             )
             await session.commit()
-            return result.lastrowid
+            return line_id
 
     async def insert_station(self, station: dict) -> int:
         """插入站点，返回 ID"""
+        from app.utils.id_generator import generate_id
+        station_id = generate_id()
         async with db_manager.get_session() as session:
-            result = await session.execute(
+            await session.execute(
                 text("""INSERT INTO metro_station
-                        (country_id, country_name, city_id, city_name, line_ids, line_names, station_name, station_name_en, station_alias, osmid, longitude, latitude, status, create_time, update_time)
-                        VALUES (:country_id, :country_name, :city_id, :city_name, :line_ids, :line_names, :station_name, :station_name_en, :station_alias, :osmid, :longitude, :latitude, 1, NOW(), NOW())"""),
-                station,
+                        (id, country_id, country_name, city_id, city_name, line_ids, line_names, station_name, station_name_en, station_alias, osmid, longitude, latitude, status_code, created_at, updated_at)
+                        VALUES (:id, :country_id, :country_name, :city_id, :city_name, :line_ids, :line_names, :station_name, :station_name_en, :station_alias, :osmid, :longitude, :latitude, 1, NOW(), NOW())"""),
+                {"id": station_id, **station},
             )
             await session.commit()
-            return result.lastrowid
+            return station_id
 
     async def update_station_location(self, station_id: int, lat: float, lng: float, address: str = ""):
         """更新站点坐标"""
         async with db_manager.get_session() as session:
             await session.execute(
                 text("""UPDATE metro_station
-                        SET latitude = :lat, longitude = :lng, update_time = NOW()
+                        SET latitude = :lat, longitude = :lng, updated_at = NOW()
                         WHERE id = :id"""),
                 {"id": station_id, "lat": lat, "lng": lng},
             )

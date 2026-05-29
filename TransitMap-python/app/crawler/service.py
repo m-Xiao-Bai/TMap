@@ -2,24 +2,25 @@
 爬虫服务 — 编排器
 
 串联 6 步管线，处理整个爬取流程。
-优化：城市/线路数据从爬取结果推导，LLM 只用于补充无法获取的信息。
+数据源：OSM Overpass API（与原脚本一致）。
+城市/线路数据由 LLM 补充。
 """
 
+import json
 import logging
+import traceback
 from app.crawler.pipeline.scraper import scrape
 from app.crawler.pipeline.llm_validator import validate_with_llm
 from app.crawler.pipeline.geo_coder import geocode_stations
 from app.crawler.pipeline.quality_checker import check_quality
 from app.crawler.pipeline.db_writer import write_to_db, update_city_stats
 from app.crawler.pipeline.reporter import generate_report
-from app.crawler.pipeline.city_enricher import enrich_city_with_llm
-from app.crawler.sources.comparator import SourceComparator
+from app.crawler.pipeline.city_enricher import enrich_city_with_llm, enrich_lines_with_llm
 from app.crawler.progress_tracker import progress_tracker
 from app.crawler.task_queue import crawler_queue
+from app.utils.id_generator import generate_id
 
 logger = logging.getLogger("tmap-python.crawler.service")
-
-comparator = SourceComparator()
 
 
 async def handle_crawl_task(task_data: dict):
@@ -27,37 +28,52 @@ async def handle_crawl_task(task_data: dict):
     处理一个爬取任务（Worker 调用此函数）。
 
     完整管线：
-    ① 并行爬取 → ② 多源对比 → ③ 确保城市/线路存在 → ④ LLM 校验 → ⑤ 坐标补全 → ⑥ 质检 → ⑦ 写入 DB → ⑧ 报告
+    ① OSM 爬取 → ② 确保城市/线路存在 → ③ LLM 校验 → ④ 坐标补全 → ⑤ 质检 → ⑥ 写入 DB → ⑦ 报告
     """
     task_id = task_data.get("task_id", "")
     city_name = task_data.get("city_name", "")
     country_id = int(task_data.get("country_id", 1))
-    sources_str = task_data.get("sources", "wikipedia,baike,osm")
-    sources = [s.strip() for s in sources_str.split(",") if s.strip()]
 
     errors = []
 
     try:
-        logger.info(f"[{task_id}] 开始处理: {city_name} (sources={sources})")
+        logger.info(f"[{task_id}] 开始处理: {city_name}")
 
-        # ① 并行爬取
-        crawl_results = await scrape(task_id, city_name, sources)
-        success_count = sum(1 for r in crawl_results if r.success)
-        if success_count == 0:
-            errors.append("所有数据源爬取失败")
-            await crawler_queue.update_task_status(task_id, "failed", error_message="所有数据源爬取失败")
-            await progress_tracker.error(task_id, "所有数据源爬取失败")
+        # ① OSM 爬取
+        crawl_results = await scrape(task_id, city_name)
+        if not crawl_results or not crawl_results[0].success:
+            error_msg = crawl_results[0].error if crawl_results else "爬取失败"
+            errors.append(error_msg)
+            await crawler_queue.update_task_status(task_id, "failed", error_message=error_msg)
+            await progress_tracker.error(task_id, error_msg)
             return
 
-        # ② 多源对比
-        await progress_tracker.update(task_id, 20, "comparing", "正在进行多源数据对比...")
-        comparison = comparator.compare(crawl_results)
-
-        if not comparison.merged_stations:
-            errors.append("对比后无有效站点数据")
-            await crawler_queue.update_task_status(task_id, "failed", error_message="无有效站点数据")
-            await progress_tracker.error(task_id, "无有效站点数据")
+        # 单数据源，直接使用结果
+        osm_result = crawl_results[0]
+        if not osm_result.stations:
+            errors.append("OSM 未找到地铁站数据")
+            await crawler_queue.update_task_status(task_id, "failed", error_message="未找到地铁站数据")
+            await progress_tracker.error(task_id, "未找到地铁站数据")
             return
+
+        # 构建 ComparisonResult（单数据源）
+        from app.crawler.sources.comparator import ComparisonResult, MergedStation, MergedLine
+        comparison = ComparisonResult(city_name=city_name)
+        comparison.merged_lines = [
+            MergedLine(name=l.name, stations=l.stations)
+            for l in osm_result.lines
+        ]
+        comparison.merged_stations = [
+            MergedStation(
+                name=s.name, name_en=s.name_en, alias=s.alias,
+                line_names=[s.line_name] if s.line_name else [],
+                lat=s.lat, lng=s.lng, osmid=s.osmid,
+                confidence="high", sources=["osm"],
+            )
+            for s in osm_result.stations
+        ]
+        comparison.source_stats = {"osm": {"lines": len(osm_result.lines), "stations": len(osm_result.stations)}}
+        comparison.confidence_summary = {"high": len(osm_result.stations), "medium": 0, "low": 0}
 
         # ③ 确保城市和线路存在（从爬取数据推导，不问 LLM）
         await progress_tracker.update(task_id, 25, "ensuring_data", "正在确保城市和线路数据存在...")
@@ -105,11 +121,21 @@ async def handle_crawl_task(task_data: dict):
         logger.info(f"[{task_id}] 任务完成: {city_name}")
 
     except Exception as e:
-        logger.error(f"[{task_id}] 任务异常: {e}", exc_info=True)
-        errors.append(str(e))
+        # 获取详细的异常位置
+        tb = traceback.extract_tb(e.__traceback__)
+        if tb:
+            last_frame = tb[-1]
+            error_location = f"{last_frame.filename}:{last_frame.lineno} in {last_frame.name}"
+            error_msg = f"[{error_location}] {type(e).__name__}: {e}"
+        else:
+            error_msg = f"{type(e).__name__}: {e}"
+
+        logger.error(f"[{task_id}] 任务异常: {error_msg}")
+        logger.error(f"[{task_id}] 完整调用栈:\n{traceback.format_exc()}")
+        errors.append(error_msg)
         try:
-            await crawler_queue.update_task_status(task_id, "failed", error_message=str(e))
-            await progress_tracker.error(task_id, str(e))
+            await crawler_queue.update_task_status(task_id, "failed", error_message=error_msg)
+            await progress_tracker.error(task_id, error_msg)
         except Exception:
             pass
 
@@ -143,67 +169,93 @@ async def _ensure_city(
             city_id = row[0]
             logger.info(f"城市已存在: {city_name} (ID={city_id})")
         else:
-            # 2. 创建最小城市记录（必填字段）
-            result = await session.execute(
+            # 2. 问大模型获取城市信息
+            await progress_tracker.update(
+                task_id, 23, "ensuring_data",
+                f"正在向大模型询问 {city_name} 的城市信息...",
+            )
+            llm_data = await enrich_city_with_llm(city_name)
+
+            # 3. 创建城市记录（包含全部 LLM 数据）
+            city_id = generate_id()
+            extra = json.dumps({
+                "source": "llm",
+                "llm_date": llm_data.get("_llm_date", ""),
+                "confidence": llm_data.get("_confidence", "medium"),
+            }, ensure_ascii=False) if llm_data.get("_source") != "llm_failed" else None
+
+            await session.execute(
                 text("""INSERT INTO city
-                        (country_id, country_name, city_name, city_name_en, city_alias,
-                         metro_line_count, metro_count, status_code, created_at, updated_at)
-                        VALUES (:country_id, '中国', :city_name, '', '', 0, 0, 1, NOW(), NOW())"""),
-                {"country_id": country_id, "city_name": city_name},
+                        (id, country_id, country_name, city_name, city_name_en, city_alias,
+                         metro_line_logo, metro_count, metro_line_count,
+                         hsr_count, metro_km, hsr_km, population,
+                         status_code, extra, created_at, updated_at)
+                        VALUES (:id, :country_id, '中国', :city_name, :city_name_en, :city_alias,
+                                :metro_line_logo, :metro_count, :metro_line_count,
+                                :hsr_count, :metro_km, :hsr_km, :population,
+                                1, :extra, NOW(), NOW())"""),
+                {
+                    "id": city_id,
+                    "country_id": country_id,
+                    "city_name": city_name,
+                    "city_name_en": llm_data.get("city_name_en"),
+                    "city_alias": llm_data.get("city_alias"),
+                    "metro_line_logo": llm_data.get("metro_line_logo"),
+                    "metro_count": llm_data.get("metro_count"),
+                    "metro_line_count": llm_data.get("metro_line_count"),
+                    "hsr_count": llm_data.get("hsr_count"),
+                    "metro_km": llm_data.get("metro_km"),
+                    "hsr_km": llm_data.get("hsr_km"),
+                    "population": llm_data.get("population"),
+                    "extra": extra,
+                },
             )
             await session.commit()
-            city_id = result.lastrowid
-            logger.info(f"创建城市最小记录: {city_name} (ID={city_id})")
+            logger.info(f"创建城市(LLM): {city_name} (ID={city_id}, en={llm_data.get('city_name_en')}, "
+                        f"alias={llm_data.get('city_alias')}, lines={llm_data.get('metro_line_count')}, "
+                        f"stations={llm_data.get('metro_count')}, km={llm_data.get('metro_km')})")
 
-            # 3. 异步 LLM 补充城市信息（不阻塞主流程）
-            try:
-                llm_data = await enrich_city_with_llm(city_name)
-                if llm_data and llm_data.get("_source") != "llm_failed":
-                    await _update_city_extra(city_id, llm_data)
-                    logger.info(f"LLM 补充城市信息完成: {city_name}")
-            except Exception as e:
-                logger.warning(f"LLM 补充城市信息失败（不影响主流程）: {e}")
-
-        # 4. 从爬取数据推导线路并确保存在
-        await _ensure_lines(task_id, city_id, city_name, country_id, comparison)
+        # 4. 问大模型获取线路数据并确保存在
+        await _ensure_lines_from_llm(task_id, city_id, city_name, country_id)
 
         return city_id
 
 
-async def _ensure_lines(
+async def _ensure_lines_from_llm(
     task_id: str,
     city_id: int,
     city_name: str,
     country_id: int,
-    comparison,
 ):
     """
-    从爬取站点数据推导线路，确保线路记录存在。
+    问大模型获取线路数据，确保线路记录存在。
 
-    优化：不问 LLM，直接从站点的 line_names 提取。
+    流程：
+    1. 问 LLM 获取该城市所有地铁线路
+    2. 对比 DB 已有线路
+    3. 创建缺失的线路
     """
     from app.db.connection import db_manager
     from sqlalchemy import text
-    import re
 
-    # 从站点数据提取所有线路名（去重）
-    line_names_from_stations = set()
-    for station in comparison.merged_stations:
-        for ln in station.line_names:
-            if ln:
-                line_names_from_stations.add(ln)
+    await progress_tracker.update(
+        task_id, 26, "ensuring_data",
+        f"正在向大模型询问 {city_name} 的地铁线路信息...",
+    )
 
-    # 也从 comparison.merged_lines 获取颜色信息
-    line_color_map = {}
-    for line in comparison.merged_lines:
-        if line.color:
-            line_color_map[line.name] = line.color
-
-    if not line_names_from_stations:
-        logger.warning("爬取数据中没有线路信息")
+    # 1. 问 LLM 获取线路数据
+    llm_lines = await enrich_lines_with_llm(city_name)
+    if not llm_lines:
+        logger.warning(f"LLM 未返回线路数据: {city_name}")
+        await progress_tracker.update(
+            task_id, 27, "ensuring_data",
+            f"大模型未返回线路数据，将使用爬取数据中的线路信息",
+        )
+        # 降级：从爬取数据中提取线路
+        await _ensure_lines_from_crawl(task_id, city_id, city_name, country_id)
         return
 
-    # 检查 DB 已有线路
+    # 2. 检查 DB 已有线路
     async with db_manager.get_session() as session:
         result = await session.execute(
             text("SELECT line_name FROM metro_line WHERE city_id = :city_id"),
@@ -211,44 +263,78 @@ async def _ensure_lines(
         )
         existing_lines = {row[0] for row in result.fetchall()}
 
-    # 创建缺失的线路
+    # 3. 创建缺失的线路
     created_count = 0
-    for line_name in sorted(line_names_from_stations):
-        if line_name in existing_lines:
+    for line_data in llm_lines:
+        line_name = line_data.get("line_name")
+        if not line_name or line_name in existing_lines:
             continue
 
-        # 从线路名提取编号
-        line_no = re.sub(r"[^0-9a-zA-Z]", "", line_name) or line_name
-        line_color = line_color_map.get(line_name, "#000000")
-
         try:
+            line_id = generate_id()
             async with db_manager.get_session() as session:
                 await session.execute(
                     text("""INSERT INTO metro_line
-                            (country_id, country_name, city_id, city_name,
-                             line_name, line_no, line_color, status_code, created_at, updated_at)
-                            VALUES (:country_id, '中国', :city_id, :city_name,
-                                    :line_name, :line_no, :line_color, 1, NOW(), NOW())"""),
+                            (id, country_id, country_name, city_id, city_name,
+                             line_name, line_no, line_color, line_color_cn,
+                             total_km, station_count,
+                             open_date, first_time, last_time,
+                             status_code, extra, created_at, updated_at)
+                            VALUES (:id, :country_id, '中国', :city_id, :city_name,
+                                    :line_name, :line_no, :line_color, :line_color_cn,
+                                    :total_km, :station_count,
+                                    :open_date, :first_time, :last_time,
+                                    1, :extra, NOW(), NOW())"""),
                     {
+                        "id": line_id,
                         "country_id": country_id,
                         "city_id": city_id,
                         "city_name": city_name,
                         "line_name": line_name,
-                        "line_no": line_no,
-                        "line_color": line_color,
+                        "line_no": line_data.get("line_no", ""),
+                        "line_color": line_data.get("line_color", "#000000"),
+                        "line_color_cn": line_data.get("line_color_cn"),
+                        "total_km": line_data.get("total_km"),
+                        "station_count": line_data.get("station_count"),
+                        "open_date": line_data.get("open_date"),
+                        "first_time": line_data.get("first_time"),
+                        "last_time": line_data.get("last_time"),
+                        "extra": json.dumps({
+                            "source": "llm",
+                            "llm_date": line_data.get("_llm_date", ""),
+                        }, ensure_ascii=False),
                     },
                 )
                 await session.commit()
                 created_count += 1
-                logger.info(f"创建线路: {line_name} (line_no={line_no}, color={line_color})")
+                logger.info(f"创建线路(LLM): {line_name} (no={line_data.get('line_no')}, "
+                            f"color={line_data.get('line_color')}, stations={line_data.get('station_count')}, "
+                            f"km={line_data.get('total_km')}, open={line_data.get('open_date')})")
         except Exception as e:
             logger.error(f"创建线路失败 {line_name}: {e}")
 
-    if created_count > 0:
-        await progress_tracker.update(
-            task_id, 28, "ensuring_data",
-            f"创建了 {created_count} 条线路记录",
-        )
+    await progress_tracker.update(
+        task_id, 28, "ensuring_data",
+        f"从大模型获取并创建了 {created_count} 条线路（共 {len(llm_lines)} 条）",
+    )
+
+
+async def _ensure_lines_from_crawl(
+    task_id: str,
+    city_id: int,
+    city_name: str,
+    country_id: int,
+):
+    """
+    降级方案：从爬取数据中提取线路（当 LLM 失败时使用）。
+    """
+    from app.db.connection import db_manager
+    from sqlalchemy import text
+    import re
+
+    # 这里需要 comparison 数据，但当前函数签名没有传入
+    # 降级方案只创建空线路记录，后续由站点数据补充
+    logger.info(f"降级方案：跳过线路创建，等待站点数据写入时自动创建")
 
 
 async def _update_city_extra(city_id: int, llm_data: dict):

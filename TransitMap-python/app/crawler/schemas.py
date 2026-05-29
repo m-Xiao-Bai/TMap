@@ -13,7 +13,6 @@ class CrawlerTriggerRequest(BaseModel):
     """触发爬取请求"""
     city_name: str
     country_id: int = 1
-    sources: str = "wikipedia,baike"  # 逗号分隔
 
 
 class CrawlerBatchRequest(BaseModel):

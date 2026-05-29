@@ -104,11 +104,14 @@ public class MetroStationManageController {
     }
 
     @DeleteMapping("/batch")
-    public Result<Map<String, String>> batchDelete(@RequestBody List<Long> ids,
+    public Result<Map<String, String>> batchDelete(@RequestBody List<Object> rawIds,
                                                     HttpServletRequest request) {
         Integer operatorRoleCode = (Integer) request.getAttribute("roleCode");
         if (operatorRoleCode == null) throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        if (ids == null || ids.isEmpty()) throw new BusinessException(ErrorCode.PARAM_ERROR);
+        if (rawIds == null || rawIds.isEmpty()) throw new BusinessException(ErrorCode.PARAM_ERROR);
+        List<Long> ids = rawIds.stream()
+                .map(obj -> obj instanceof Number ? ((Number) obj).longValue() : Long.parseLong(obj.toString()))
+                .toList();
         metroStationService.batchDeleteMetroStations(ids, operatorRoleCode);
         return Result.success(null);
     }

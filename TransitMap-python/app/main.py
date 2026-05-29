@@ -10,6 +10,7 @@ TransitMap Python Service — FastAPI 入口
 
 import time
 import logging
+import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -116,12 +117,22 @@ async def tmap_exception_handler(request: Request, exc: TmapException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"未处理异常: {exc}")
+    # 获取详细的异常信息（文件名、行号、调用栈）
+    tb = traceback.extract_tb(exc.__traceback__)
+    if tb:
+        last_frame = tb[-1]
+        error_location = f"{last_frame.filename}:{last_frame.lineno} in {last_frame.name}"
+        error_detail = f"{type(exc).__name__}: {exc}"
+        logger.error(f"未处理异常 | 位置: {error_location} | 错误: {error_detail}")
+        logger.error(f"完整调用栈:\n{traceback.format_exc()}")
+    else:
+        logger.exception(f"未处理异常: {exc}")
+
     return JSONResponse(
         status_code=500,
         content={
             "code": "INTERNAL_ERROR",
-            "message": "服务内部错误",
+            "message": f"{type(exc).__name__}: {str(exc)}",
             "data": None,
         },
     )

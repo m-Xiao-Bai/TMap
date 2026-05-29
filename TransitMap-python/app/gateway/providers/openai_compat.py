@@ -30,10 +30,25 @@ class OpenAICompatProvider(BaseLlmProvider):
         super().__init__(**kwargs)
         self._client: httpx.AsyncClient | None = None
 
+    def _get_endpoint(self) -> str:
+        """
+        获取 API 端点路径。
+
+        智能判断：
+        - 如果 base_url 已经包含路径（如 /anthropic），使用它
+        - 如果 base_url 是标准 OpenAI 格式，追加 /chat/completions
+        """
+        # 如果 base_url 已经以常见路径结尾，直接使用
+        if self.base_url.endswith("/chat/completions"):
+            return self.base_url
+        if self.base_url.endswith("/v1/messages"):
+            return self.base_url
+        # 默认追加 /chat/completions
+        return self.base_url.rstrip("/") + "/chat/completions"
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                base_url=self.base_url,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
@@ -62,7 +77,8 @@ class OpenAICompatProvider(BaseLlmProvider):
         payload = self._build_payload(request, stream=False)
 
         try:
-            resp = await client.post("/chat/completions", json=payload)
+            endpoint = self._get_endpoint()
+            resp = await client.post(endpoint, json=payload)
             resp.raise_for_status()
             data = resp.json()
 
@@ -91,7 +107,8 @@ class OpenAICompatProvider(BaseLlmProvider):
         payload = self._build_payload(request, stream=True)
 
         try:
-            async with client.stream("POST", "/chat/completions", json=payload) as resp:
+            endpoint = self._get_endpoint()
+            async with client.stream("POST", endpoint, json=payload) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):

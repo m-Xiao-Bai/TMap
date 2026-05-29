@@ -109,16 +109,20 @@ public class MetroLineManageController {
     }
 
     @DeleteMapping("/batch")
-    public Result<Map<String, String>> batchDelete(@RequestBody Map<String, List<Long>> body,
+    public Result<Map<String, String>> batchDelete(@RequestBody Map<String, List<Object>> body,
                                                     HttpServletRequest request) {
         Integer operatorRoleCode = (Integer) request.getAttribute("roleCode");
         if (operatorRoleCode == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
-        List<Long> ids = body.get("ids");
-        if (ids == null || ids.isEmpty()) {
+        List<Object> rawIds = body.get("ids");
+        if (rawIds == null || rawIds.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR);
         }
+        // 兼容 Python 生成的大 ID（String → Long）
+        List<Long> ids = rawIds.stream()
+                .map(obj -> obj instanceof Number ? ((Number) obj).longValue() : Long.parseLong(obj.toString()))
+                .toList();
         metroLineService.batchDeleteMetroLines(ids, operatorRoleCode);
         return Result.success(null);
     }

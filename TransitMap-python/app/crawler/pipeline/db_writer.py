@@ -16,6 +16,7 @@ from app.db.connection import db_manager
 from app.crawler.sources.comparator import MergedStation, MergedLine, ComparisonResult
 from app.crawler.progress_tracker import progress_tracker
 from app.crawler.pipeline.quality_checker import QualityReport
+from app.utils.id_generator import generate_id
 
 logger = logging.getLogger("tmap-python.crawler.pipeline.db_writer")
 
@@ -159,14 +160,16 @@ async def _insert_line(
     import re
     # 提取线路编号（如 "1号线" → "1"）
     line_no = re.sub(r"[^0-9a-zA-Z]", "", line.name) or line.name
+    line_id = generate_id()
     async with db_manager.get_session() as session:
         result = await session.execute(
             text("""INSERT INTO metro_line
-                    (country_id, country_name, city_id, city_name,
+                    (id, country_id, country_name, city_id, city_name,
                      line_name, line_no, line_color, status_code, created_at, updated_at)
-                    VALUES (:country_id, :country_name, :city_id, :city_name,
+                    VALUES (:id, :country_id, :country_name, :city_id, :city_name,
                             :line_name, :line_no, :line_color, 1, NOW(), NOW())"""),
             {
+                "id": line_id,
                 "country_id": country_id,
                 "country_name": country_name,
                 "city_id": city_id,
@@ -192,22 +195,24 @@ async def _insert_station(
     extra = json.dumps({
         "source": "crawler",
         "confidence": station.confidence,
-        "sources": station.sources,
+        "sources": station.sources if hasattr(station, 'sources') else [],
     }, ensure_ascii=False)
+    station_id = generate_id()
     async with db_manager.get_session() as session:
         result = await session.execute(
             text("""INSERT INTO metro_station
-                    (country_id, country_name, city_id, city_name,
+                    (id, country_id, country_name, city_id, city_name,
                      station_name, station_name_en, station_alias,
                      line_ids, line_names,
                      longitude, latitude,
                      osmid, is_transfer, status_code, extra, created_at, updated_at)
-                    VALUES (:country_id, :country_name, :city_id, :city_name,
+                    VALUES (:id, :country_id, :country_name, :city_id, :city_name,
                             :station_name, :station_name_en, :station_alias,
                             :line_ids, :line_names,
                             :longitude, :latitude,
                             :osmid, :is_transfer, 1, :extra, NOW(), NOW())"""),
             {
+                "id": station_id,
                 "country_id": country_id,
                 "country_name": country_name,
                 "city_id": city_id,

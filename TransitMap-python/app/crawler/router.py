@@ -32,7 +32,7 @@ async def trigger_crawl(
     task_id = await crawler_queue.enqueue(
         city_name=request.city_name,
         country_id=request.country_id,
-        sources=request.sources,
+        sources="osm",  # 固定使用 OSM
         trigger_user_id=0,  # 由 Java 端传入
     )
     return {

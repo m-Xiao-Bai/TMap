@@ -38,7 +38,6 @@ public class CrawlerManageController {
         String cityName = (String) body.get("city_name");
         Long countryId = body.get("country_id") != null
                 ? Long.valueOf(body.get("country_id").toString()) : 1L;
-        String sources = (String) body.getOrDefault("sources", "wikipedia,baike,osm");
 
         if (cityName == null || cityName.trim().isEmpty()) {
             return Result.fail(400, "城市名称不能为空");
@@ -46,7 +45,7 @@ public class CrawlerManageController {
 
         try {
             Long userId = getUserId(request);
-            String taskId = crawlerService.triggerCrawl(cityName.trim(), countryId, sources);
+            String taskId = crawlerService.triggerCrawl(cityName.trim(), countryId, "osm");
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("task_id", taskId);
